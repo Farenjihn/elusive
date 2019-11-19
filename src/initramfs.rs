@@ -1,7 +1,7 @@
-use super::config::Config;
+use super::config::Initramfs;
 
+use fs_extra::dir::CopyOptions;
 use goblin::elf::Elf;
-use goblin::Object;
 use std::ffi::CStr;
 use std::io::Result;
 use std::os::unix;
@@ -58,12 +58,12 @@ impl Builder {
         Ok(builder)
     }
 
-    pub fn from_config(config: Config) -> Result<Self> {
-        let mut builder = Builder::new(config.initramfs.path)?;
-        builder.add_init(config.initramfs.init)?;
+    pub fn from_config(config: Initramfs) -> Result<Self> {
+        let mut builder = Builder::new(config.path)?;
+        builder.add_init(config.init)?;
 
-        if config.initramfs.modules {
-            builder.add_modules()?;
+        if let Some(modules) = config.modules {
+            builder.add_modules(modules.release)?;
         }
 
         if let Some(binaries) = config.bin {
@@ -91,29 +91,31 @@ impl Builder {
         Ok(())
     }
 
-    pub fn add_modules(&mut self) -> Result<()> {
-        let mut s = unsafe { std::mem::zeroed() };
-        let ret = unsafe { libc::uname(&mut s) };
+    pub fn add_modules(&mut self, release: Option<String>) -> Result<()> {
+        let release = match release {
+            Some(release) => release,
+            None => get_kernel_version()?,
+        };
 
-        if ret == 0 {
-            let version = unsafe { CStr::from_ptr(s.release[..].as_ptr()) }
-                .to_string_lossy()
-                .into_owned();
+        let path = Path::new("/lib/modules/").join(release);
 
-            let path = Path::new("/lib/modules/").join(version);
-
-            if path.exists() {
-                fs::copy(path, self.tmp.path())?;
-            } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "could not find kernel modules",
-                ));
-            }
+        if path.exists() {
+            fs_extra::dir::copy(
+                path,
+                self.tmp.path(),
+                &CopyOptions {
+                    overwrite: false,
+                    skip_exist: false,
+                    buffer_size: 64000,
+                    copy_inside: true,
+                    depth: 0,
+                },
+            )
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "could not copy modules"))?;
         } else {
             return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "could not read kernel version",
+                io::ErrorKind::NotFound,
+                "could not find kernel modules",
             ));
         }
 
@@ -188,6 +190,8 @@ impl Builder {
         Ok(())
     }
 
+    // TODO replace shelling out with a proper
+    // library
     pub fn build(self) -> Result<()> {
         let path = self.tmp.path();
         let find_cmd = Command::new("find")
@@ -204,7 +208,6 @@ impl Builder {
             .spawn()?;
 
         let gzip_cmd = Command::new("gzip")
-            .args(&["-9"])
             .current_dir(path)
             .stdin(cpio_cmd.stdout.unwrap())
             .stdout(Stdio::piped())
@@ -219,13 +222,28 @@ fn parse_elf<'a, T>(data: &'a T) -> Result<Elf<'a>>
 where
     T: AsRef<[u8]>,
 {
-    // TODO handle error correctly
-    let object = Object::parse(data.as_ref()).unwrap();
-    match object {
-        Object::Elf(elf) => Ok(elf),
-        _ => Err(io::Error::new(
+    Elf::parse(data.as_ref()).map_err(|_| {
+        io::Error::new(
             io::ErrorKind::InvalidInput,
             "only ELF binaries are supported",
-        )),
+        )
+    })
+}
+
+fn get_kernel_version() -> Result<String> {
+    let mut s = unsafe { std::mem::zeroed() };
+    let ret = unsafe { libc::uname(&mut s) };
+
+    if ret == 0 {
+        let version = unsafe { CStr::from_ptr(s.release[..].as_ptr()) }
+            .to_string_lossy()
+            .into_owned();
+
+        Ok(version)
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "could not read kernel version",
+        ))
     }
 }

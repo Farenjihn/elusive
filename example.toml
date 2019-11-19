@@ -1,13 +1,15 @@
 [initramfs]
 path = "initramfs"
 init = "init"
-modules = false
 
-[[bin]]
+# [initramfs.modules]
+# release = "5.3.11-arch1-1"
+
+[[initramfs.bin]]
 path = "/usr/bin/busybox"
 
-[[bin]]
+[[initramfs.bin]]
 path = "/usr/bin/cryptsetup"
 
-[[lib]]
+[[initramfs.lib]]
 path = "/usr/lib/ld-linux-x86-64.so.2"

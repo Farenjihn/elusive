@@ -5,9 +5,15 @@ authors = ["Valentin Finini <valentin.finini@cysec.systems>"]
 edition = "2018"
 
 [dependencies]
-goblin = "0.1.1"
+clap = "2.33.0"
+fs_extra = "1.1.0"
 libc = "0.2.65"
 serde = { version = "1.0.102", features = ["derive"] }
 serde_derive = "1.0.102"
 tempfile = "3.1.0"
 toml = "0.5.5"
+
+[dependencies.goblin]
+version = "0.1.1"
+default_features = false
+features = ["std", "elf32", "elf64", "endian_fd"]
