@@ -21,13 +21,9 @@ const ROOT_SYMLINKS: [(&str, &str); 4] = [
     ("sbin", "usr/bin"),
 ];
 
-const LIB_LOOKUP_DIRS: [&str; 6] = [
-    "/usr/lib",
-    "/usr/lib32",
-    "/usr/lib64",
-    "/lib",
-    "/lib32",
+const LIB_LOOKUP_DIRS: [&str; 2] = [
     "/lib64",
+    "/usr/lib64",
 ];
 
 pub struct Builder {
