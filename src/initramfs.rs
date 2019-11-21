@@ -21,10 +21,7 @@ const ROOT_SYMLINKS: [(&str, &str); 4] = [
     ("sbin", "usr/bin"),
 ];
 
-const LIB_LOOKUP_DIRS: [&str; 2] = [
-    "/lib64",
-    "/usr/lib64",
-];
+const LIB_LOOKUP_DIRS: [&str; 2] = ["/lib64", "/usr/lib64"];
 
 pub struct Builder {
     path: PathBuf,
@@ -119,71 +116,11 @@ impl Builder {
     }
 
     pub fn add_binary(&mut self, path: PathBuf) -> Result<()> {
-        if path.exists() {
-            let bin = fs::read(path.clone())?;
-            let elf = parse_elf(&bin)?;
-            let libraries = elf.libraries;
-
-            // lookup and add dynamic libraries
-            if !libraries.is_empty() {
-                for lib in libraries {
-                    let path = match LIB_LOOKUP_DIRS
-                        .iter()
-                        .map(|dir| Path::new(dir).join(lib))
-                        .find(|path| path.exists())
-                    {
-                        Some(path) => path,
-                        None => {
-                            return Err(io::Error::new(
-                                io::ErrorKind::NotFound,
-                                "dynamic dependency not found",
-                            ))
-                        }
-                    };
-
-                    self.add_library(path)?;
-                }
-            }
-
-            let filename = match path.file_name() {
-                Some(filename) => filename,
-                None => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        "binary path invalid",
-                    ))
-                }
-            };
-
-            let dest = self.tmp.path().join("usr/bin").join(filename);
-            fs::copy(path, dest)?;
-        } else {
-            return Err(io::Error::new(io::ErrorKind::NotFound, "binary not found"));
-        }
-
-        Ok(())
+        self.add_elf(path, "usr/bin")
     }
 
-    // TODO should it also check for dynamic dependencies ?
     pub fn add_library(&self, path: PathBuf) -> Result<()> {
-        if path.exists() {
-            let filename = match path.file_name() {
-                Some(filename) => filename,
-                None => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        "binary path invalid",
-                    ))
-                }
-            };
-
-            let dest = self.tmp.path().join("usr/lib").join(filename);
-            fs::copy(path, dest)?;
-        } else {
-            return Err(io::Error::new(io::ErrorKind::NotFound, "library not found"));
-        }
-
-        Ok(())
+        self.add_elf(path, "usr/lib")
     }
 
     // TODO replace shelling out with a proper
@@ -210,6 +147,62 @@ impl Builder {
             .output()?;
 
         fs::write(self.path, gzip_cmd.stdout)?;
+        Ok(())
+    }
+}
+
+impl Builder {
+    fn add_elf<P>(&self, path: PathBuf, dest: P) -> Result<()>
+    where
+        P: Into<PathBuf>,
+    {
+        if path.exists() {
+            let bin = fs::read(path.clone())?;
+            let elf = parse_elf(&bin)?;
+            self.add_dependencies(elf)?;
+
+            let filename = match path.file_name() {
+                Some(filename) => filename,
+                None => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "binary path invalid",
+                    ))
+                }
+            };
+
+            let dest = self.tmp.path().join(dest.into()).join(filename);
+            fs::copy(path, dest)?;
+        } else {
+            return Err(io::Error::new(io::ErrorKind::NotFound, "binary not found"));
+        }
+
+        Ok(())
+    }
+
+    fn add_dependencies(&self, elf: Elf) -> Result<()> {
+        let libraries = elf.libraries;
+
+        if !libraries.is_empty() {
+            for lib in libraries {
+                let path = match LIB_LOOKUP_DIRS
+                    .iter()
+                    .map(|dir| Path::new(dir).join(lib))
+                    .find(|path| path.exists())
+                {
+                    Some(path) => path,
+                    None => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::NotFound,
+                            "dynamic dependency not found",
+                        ))
+                    }
+                };
+
+                self.add_library(path)?;
+            }
+        }
+
         Ok(())
     }
 }
