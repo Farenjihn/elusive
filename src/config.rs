@@ -10,14 +10,15 @@ pub struct Config {
 pub struct Initramfs {
     pub path: PathBuf,
     pub init: PathBuf,
-    pub modules: Option<Modules>,
+    pub kernel_version: Option<String>,
+    pub module: Option<Vec<Module>>,
     pub bin: Option<Vec<Binary>>,
     pub lib: Option<Vec<Library>>,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Modules {
-    pub release: Option<String>,
+pub struct Module {
+    pub name: String,
 }
 
 #[derive(Deserialize, Debug)]

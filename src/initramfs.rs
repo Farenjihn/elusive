@@ -1,9 +1,9 @@
 use super::config::Initramfs;
 
-use fs_extra::dir::CopyOptions;
 use goblin::elf::Elf;
 use std::ffi::CStr;
 use std::io::Result;
+use std::mem::MaybeUninit;
 use std::os::unix;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -55,8 +55,15 @@ impl Builder {
         let mut builder = Builder::new(config.path)?;
         builder.add_init(config.init)?;
 
-        if let Some(modules) = config.modules {
-            builder.add_modules(modules.release)?;
+        if let Some(modules) = config.module {
+            let kernel_version = match config.kernel_version {
+                Some(kernel_version) => kernel_version,
+                None => get_kernel_version()?,
+            };
+
+            for module in modules {
+                builder.add_module(&kernel_version, module.name)?;
+            }
         }
 
         if let Some(binaries) = config.bin {
@@ -84,34 +91,43 @@ impl Builder {
         Ok(())
     }
 
-    pub fn add_modules(&mut self, release: Option<String>) -> Result<()> {
-        let release = match release {
-            Some(release) => release,
-            None => get_kernel_version()?,
-        };
+    pub fn add_module(&mut self, kernel_version: &str, name: String) -> Result<()> {
+        let modules_path = format!("/lib/modules/{}/", kernel_version);
+        let module_filename = format!("{}.ko.*", name);
 
-        let path = Path::new("/lib/modules/").join(release);
+        let find_cmd = Command::new("find")
+            .args(&[&modules_path, "-name", &module_filename])
+            .stdout(Stdio::piped())
+            .output()?;
 
-        if path.exists() {
-            fs_extra::dir::copy(
-                path,
-                self.tmp.path(),
-                &CopyOptions {
-                    overwrite: false,
-                    skip_exist: false,
-                    buffer_size: 64000,
-                    copy_inside: true,
-                    depth: 0,
-                },
-            )
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "could not copy modules"))?;
-        } else {
+        if find_cmd.stdout.is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
-                "could not find kernel modules",
+                format!("module not found: {}", name),
             ));
         }
 
+        let output = std::str::from_utf8(&find_cmd.stdout)
+            .expect("find should return a valid utf8 string")
+            .trim();
+
+        let source = Path::new(output);
+        let target = self.tmp.path().join(
+            source
+                .parent()
+                .expect("path should have parent")
+                .strip_prefix("/")
+                .expect("parent should have a leading slash"),
+        );
+
+        if !target.exists() {
+            fs::create_dir_all(&target)?;
+        }
+
+        fs::copy(
+            source,
+            target.join(source.file_name().expect("path should have filename")),
+        )?;
         Ok(())
     }
 
@@ -136,13 +152,13 @@ impl Builder {
         let cpio_cmd = Command::new("cpio")
             .args(&["-H", "newc", "-o"])
             .current_dir(path)
-            .stdin(find_cmd.stdout.unwrap())
+            .stdin(find_cmd.stdout.expect("find should have output"))
             .stdout(Stdio::piped())
             .spawn()?;
 
         let gzip_cmd = Command::new("gzip")
             .current_dir(path)
-            .stdin(cpio_cmd.stdout.unwrap())
+            .stdin(cpio_cmd.stdout.expect("cpio should have output"))
             .stdout(Stdio::piped())
             .output()?;
 
@@ -166,7 +182,7 @@ impl Builder {
                 None => {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidInput,
-                        "binary path invalid",
+                        format!("binary path invalid: {}", path.to_string_lossy()),
                     ))
                 }
             };
@@ -174,7 +190,10 @@ impl Builder {
             let dest = self.tmp.path().join(dest.into()).join(filename);
             fs::copy(path, dest)?;
         } else {
-            return Err(io::Error::new(io::ErrorKind::NotFound, "binary not found"));
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("binary not found: {}", path.to_string_lossy()),
+            ));
         }
 
         Ok(())
@@ -220,19 +239,20 @@ where
 }
 
 fn get_kernel_version() -> Result<String> {
-    let mut s = unsafe { std::mem::zeroed() };
-    let ret = unsafe { libc::uname(&mut s) };
+    let version = unsafe {
+        let mut buf = MaybeUninit::uninit();
+        let ret = libc::uname(buf.as_mut_ptr());
 
-    if ret == 0 {
-        let version = unsafe { CStr::from_ptr(s.release[..].as_ptr()) }
-            .to_string_lossy()
-            .into_owned();
+        if ret == 0 {
+            let buf = buf.assume_init();
+            CStr::from_ptr(buf.release[..].as_ptr())
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "could not read kernel version",
+            ));
+        }
+    };
 
-        Ok(version)
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "could not read kernel version",
-        ))
-    }
+    Ok(version.to_string_lossy().into_owned())
 }
