@@ -1,6 +1,8 @@
 use super::config::Initramfs;
 
 use goblin::elf::Elf;
+use log::info;
+use std::collections::HashSet;
 use std::ffi::CStr;
 use std::io::Result;
 use std::mem::MaybeUninit;
@@ -26,6 +28,7 @@ const LIB_LOOKUP_DIRS: [&str; 2] = ["/lib64", "/usr/lib64"];
 pub struct Builder {
     path: PathBuf,
     tmp: TempDir,
+    set: HashSet<PathBuf>,
 }
 
 impl Builder {
@@ -46,6 +49,7 @@ impl Builder {
         let builder = Builder {
             path: path.into(),
             tmp,
+            set: HashSet::new(),
         };
 
         Ok(builder)
@@ -84,6 +88,8 @@ impl Builder {
     }
 
     pub fn add_init(&mut self, path: PathBuf) -> Result<()> {
+        info!("Adding init script: {}", path.to_string_lossy());
+
         if path.exists() {
             fs::copy(path, self.tmp.path().join("init"))?;
         } else {
@@ -94,6 +100,8 @@ impl Builder {
     }
 
     pub fn add_module(&mut self, kernel_version: &str, name: String) -> Result<()> {
+        info!("Adding kernel module: {}", name);
+
         let modules_path = format!("/lib/modules/{}/", kernel_version);
         let module_filename = format!("{}.ko.*", name);
 
@@ -135,21 +143,38 @@ impl Builder {
     }
 
     pub fn add_binary(&mut self, path: PathBuf) -> Result<()> {
-        self.add_elf(path, "usr/bin")
+        if !self.set.contains(&path) {
+            info!("Adding binary: {}", path.to_string_lossy());
+            self.set.insert(path.clone());
+
+            return self.add_elf(path, "usr/bin");
+        }
+
+        Ok(())
     }
 
-    pub fn add_library(&self, path: PathBuf) -> Result<()> {
-        self.add_elf(path, "usr/lib")
+    pub fn add_library(&mut self, path: PathBuf) -> Result<()> {
+        if !self.set.contains(&path) {
+            info!("Adding library: {}", path.to_string_lossy());
+            self.set.insert(path.clone());
+
+            return self.add_elf(path, "usr/lib");
+        }
+
+        Ok(())
     }
 
     // TODO replace shelling out with a proper
     // library
     pub fn build(self) -> Result<()> {
+        info!("Writing initramfs to: {}", self.path.to_string_lossy());
+
         let path = self.tmp.path();
         let find_cmd = Command::new("find")
             .args(&["."])
             .current_dir(path)
             .stdout(Stdio::piped())
+            .stderr(Stdio::null())
             .spawn()?;
 
         let cpio_cmd = Command::new("cpio")
@@ -157,12 +182,14 @@ impl Builder {
             .current_dir(path)
             .stdin(find_cmd.stdout.expect("find should have output"))
             .stdout(Stdio::piped())
+            .stderr(Stdio::null())
             .spawn()?;
 
         let gzip_cmd = Command::new("gzip")
             .current_dir(path)
             .stdin(cpio_cmd.stdout.expect("cpio should have output"))
             .stdout(Stdio::piped())
+            .stderr(Stdio::null())
             .output()?;
 
         fs::write(self.path, gzip_cmd.stdout)?;
@@ -171,7 +198,7 @@ impl Builder {
 }
 
 impl Builder {
-    fn add_elf<P>(&self, path: PathBuf, dest: P) -> Result<()>
+    fn add_elf<P>(&mut self, path: PathBuf, dest: P) -> Result<()>
     where
         P: Into<PathBuf>,
     {
@@ -202,7 +229,7 @@ impl Builder {
         Ok(())
     }
 
-    fn add_dependencies(&self, elf: Elf) -> Result<()> {
+    fn add_dependencies(&mut self, elf: Elf) -> Result<()> {
         let libraries = elf.libraries;
 
         if !libraries.is_empty() {
