@@ -64,6 +64,8 @@ impl Builder {
             for module in modules {
                 builder.add_module(&kernel_version, module.name)?;
             }
+
+            builder.depmod()?;
         }
 
         if let Some(binaries) = config.bin {
@@ -128,6 +130,7 @@ impl Builder {
             source,
             target.join(source.file_name().expect("path should have filename")),
         )?;
+
         Ok(())
     }
 
@@ -221,6 +224,20 @@ impl Builder {
                 self.add_library(path)?;
             }
         }
+
+        Ok(())
+    }
+
+    fn depmod(&self) -> Result<()> {
+        Command::new("depmod")
+            .args(&[
+                "-b",
+                self.tmp
+                    .path()
+                    .to_str()
+                    .expect("tmpdir path should be valid utf8"),
+            ])
+            .output()?;
 
         Ok(())
     }
