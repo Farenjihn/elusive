@@ -6,10 +6,14 @@ use config::Config;
 use clap::{App, AppSettings, Arg, SubCommand};
 use std::error::Error;
 use std::fs;
+use env_logger::Env;
 
 const CONFIG_PATH: &str = "/etc/elusive.toml";
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let env = Env::default().filter_or("RUST_LOG", "info");
+    env_logger::init_from_env(env);
+
     let matches = App::new("elusive")
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg(
