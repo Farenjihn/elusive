@@ -22,16 +22,27 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
         .subcommand(
             SubCommand::with_name("initramfs")
-                .about("Generate a compressed cpio archive for initramfs"),
+                .about("Generate a compressed cpio archive for initramfs")
+                .arg(
+                    Arg::with_name("kver")
+                        .short("k")
+                        .long("kver")
+                        .help("Kernel version to look up modules")
+                        .takes_value(true),
+                ),
         )
         .get_matches();
 
     let config_path = matches.value_of("config").unwrap_or_else(|| CONFIG_PATH);
     let data = fs::read(config_path)?;
-    let config: Config = toml::from_slice(&data)?;
+    let mut config: Config = toml::from_slice(&data)?;
 
     match matches.subcommand() {
-        ("initramfs", Some(_)) => {
+        ("initramfs", Some(initramfs)) => {
+            if let Some(kver) = initramfs.value_of("kver") {
+                config.initramfs.kernel_version = Some(kver.to_string());
+            }
+
             let builder = initramfs::Builder::from_config(config.initramfs)?;
             builder.build()?;
         }
