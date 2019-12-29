@@ -28,17 +28,13 @@ const ROOT_SYMLINKS: [(&str, &str); 4] = [
 
 const LIB_LOOKUP_DIRS: [&str; 2] = ["/lib64", "/usr/lib64"];
 
-pub struct Builder {
-    path: PathBuf,
+pub(crate) struct Builder {
     tmp: TempDir,
     set: HashSet<PathBuf>,
 }
 
 impl Builder {
-    pub fn new<P>(path: P) -> io::Result<Self>
-    where
-        P: Into<PathBuf>,
-    {
+    pub(crate) fn new() -> io::Result<Self> {
         let tmp = TempDir::new()?;
 
         for dir in &ROOT_DIRS {
@@ -50,7 +46,6 @@ impl Builder {
         }
 
         let builder = Builder {
-            path: path.into(),
             tmp,
             set: HashSet::new(),
         };
@@ -58,12 +53,15 @@ impl Builder {
         Ok(builder)
     }
 
-    pub fn from_config(config: Initramfs) -> io::Result<Self> {
-        let mut builder = Builder::new(config.path)?;
+    pub(crate) fn from_config(
+        config: Initramfs,
+        kernel_version: Option<String>,
+    ) -> io::Result<Self> {
+        let mut builder = Builder::new()?;
         builder.add_init(config.init)?;
 
         if let Some(modules) = config.module {
-            let kernel_version = match config.kernel_version {
+            let kernel_version = match kernel_version {
                 Some(kernel_version) => kernel_version,
                 None => get_kernel_version()?,
             };
@@ -90,7 +88,7 @@ impl Builder {
         Ok(builder)
     }
 
-    pub fn add_init(&mut self, path: PathBuf) -> io::Result<()> {
+    pub(crate) fn add_init(&mut self, path: PathBuf) -> io::Result<()> {
         info!("Adding init script: {}", path.to_string_lossy());
 
         if path.exists() {
@@ -103,7 +101,7 @@ impl Builder {
         Ok(())
     }
 
-    pub fn add_module(&mut self, kernel_version: &str, name: String) -> io::Result<()> {
+    pub(crate) fn add_module(&mut self, kernel_version: &str, name: String) -> io::Result<()> {
         info!("Adding kernel module: {}", name);
 
         let modules_path = format!("/lib/modules/{}/", kernel_version);
@@ -144,7 +142,7 @@ impl Builder {
         Ok(())
     }
 
-    pub fn add_binary(&mut self, path: PathBuf) -> io::Result<()> {
+    pub(crate) fn add_binary(&mut self, path: PathBuf) -> io::Result<()> {
         if !self.set.contains(&path) {
             info!("Adding binary: {}", path.to_string_lossy());
             self.set.insert(path.clone());
@@ -155,7 +153,7 @@ impl Builder {
         Ok(())
     }
 
-    pub fn add_library(&mut self, path: PathBuf) -> io::Result<()> {
+    pub(crate) fn add_library(&mut self, path: PathBuf) -> io::Result<()> {
         if !self.set.contains(&path) {
             info!("Adding library: {}", path.to_string_lossy());
             self.set.insert(path.clone());
@@ -166,10 +164,14 @@ impl Builder {
         Ok(())
     }
 
-    pub fn build(self) -> io::Result<()> {
-        info!("Writing initramfs to: {}", self.path.to_string_lossy());
+    pub(crate) fn build<P>(self, output: P, ucode: Option<P>) -> io::Result<()>
+    where
+        P: Into<PathBuf>,
+    {
+        let output = output.into();
+        info!("Writing initramfs to: {}", output.to_string_lossy());
 
-        let output_file = File::create(self.path)?;
+        let output_file = File::create(output)?;
         let mut encoder = GzEncoder::new(output_file, Compression::default());
 
         let tmp_root = self.tmp.path();
