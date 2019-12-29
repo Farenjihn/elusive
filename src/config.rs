@@ -2,31 +2,35 @@ use serde::Deserialize;
 use std::path::PathBuf;
 
 #[derive(Deserialize, Debug)]
-pub struct Config {
-    pub initramfs: Initramfs,
+pub(crate) struct Config {
+    pub(crate) initramfs: Initramfs,
+    pub(crate) microcode: Microcode,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Initramfs {
-    pub path: PathBuf,
-    pub init: PathBuf,
-    pub kernel_version: Option<String>,
-    pub module: Option<Vec<Module>>,
-    pub bin: Option<Vec<Binary>>,
-    pub lib: Option<Vec<Library>>,
+pub(crate) struct Initramfs {
+    pub(crate) init: PathBuf,
+    pub(crate) module: Option<Vec<Module>>,
+    pub(crate) bin: Option<Vec<Binary>>,
+    pub(crate) lib: Option<Vec<Library>>,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Module {
-    pub name: String,
+pub(crate) struct Module {
+    pub(crate) name: String,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Binary {
-    pub path: PathBuf,
+pub(crate) struct Binary {
+    pub(crate) path: PathBuf,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Library {
-    pub path: PathBuf,
+pub(crate) struct Library {
+    pub(crate) path: PathBuf,
+}
+
+#[derive(Deserialize, Debug)]
+pub(crate) struct Microcode {
+    pub(crate) cpu: String,
 }
