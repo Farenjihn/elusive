@@ -1,15 +1,18 @@
-use super::config::Initramfs;
+use crate::archive;
+use crate::config::Initramfs;
 
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use goblin::elf::Elf;
 use log::info;
 use std::collections::HashSet;
-use std::ffi::CStr;
-use std::io::Result;
+use std::ffi::{CStr, CString};
+use std::fs::File;
 use std::mem::MaybeUninit;
-use std::os::unix;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::{fs, io};
+use std::{fs, io, os::unix};
 use tempfile::TempDir;
 
 const ROOT_DIRS: [&str; 10] = [
@@ -32,7 +35,7 @@ pub struct Builder {
 }
 
 impl Builder {
-    pub fn new<P>(path: P) -> Result<Self>
+    pub fn new<P>(path: P) -> io::Result<Self>
     where
         P: Into<PathBuf>,
     {
@@ -55,7 +58,7 @@ impl Builder {
         Ok(builder)
     }
 
-    pub fn from_config(config: Initramfs) -> Result<Self> {
+    pub fn from_config(config: Initramfs) -> io::Result<Self> {
         let mut builder = Builder::new(config.path)?;
         builder.add_init(config.init)?;
 
@@ -87,11 +90,12 @@ impl Builder {
         Ok(builder)
     }
 
-    pub fn add_init(&mut self, path: PathBuf) -> Result<()> {
+    pub fn add_init(&mut self, path: PathBuf) -> io::Result<()> {
         info!("Adding init script: {}", path.to_string_lossy());
 
         if path.exists() {
-            fs::copy(path, self.tmp.path().join("init"))?;
+            let dest = self.tmp.path().join("init");
+            copy_and_chown(path, dest)?;
         } else {
             return Err(io::Error::new(io::ErrorKind::NotFound, "init not found"));
         }
@@ -99,7 +103,7 @@ impl Builder {
         Ok(())
     }
 
-    pub fn add_module(&mut self, kernel_version: &str, name: String) -> Result<()> {
+    pub fn add_module(&mut self, kernel_version: &str, name: String) -> io::Result<()> {
         info!("Adding kernel module: {}", name);
 
         let modules_path = format!("/lib/modules/{}/", kernel_version);
@@ -121,7 +125,7 @@ impl Builder {
             .expect("find should return a valid utf8 string")
             .trim();
 
-        let source = Path::new(output);
+        let source = PathBuf::from(output);
         let target = self.tmp.path().join(
             source
                 .parent()
@@ -134,15 +138,13 @@ impl Builder {
             fs::create_dir_all(&target)?;
         }
 
-        fs::copy(
-            source,
-            target.join(source.file_name().expect("path should have filename")),
-        )?;
+        let dest = target.join(source.file_name().expect("path should have filename"));
+        copy_and_chown(source, dest)?;
 
         Ok(())
     }
 
-    pub fn add_binary(&mut self, path: PathBuf) -> Result<()> {
+    pub fn add_binary(&mut self, path: PathBuf) -> io::Result<()> {
         if !self.set.contains(&path) {
             info!("Adding binary: {}", path.to_string_lossy());
             self.set.insert(path.clone());
@@ -153,7 +155,7 @@ impl Builder {
         Ok(())
     }
 
-    pub fn add_library(&mut self, path: PathBuf) -> Result<()> {
+    pub fn add_library(&mut self, path: PathBuf) -> io::Result<()> {
         if !self.set.contains(&path) {
             info!("Adding library: {}", path.to_string_lossy());
             self.set.insert(path.clone());
@@ -164,41 +166,21 @@ impl Builder {
         Ok(())
     }
 
-    // TODO replace shelling out with a proper
-    // library
-    pub fn build(self) -> Result<()> {
+    pub fn build(self) -> io::Result<()> {
         info!("Writing initramfs to: {}", self.path.to_string_lossy());
 
-        let path = self.tmp.path();
-        let find_cmd = Command::new("find")
-            .args(&["."])
-            .current_dir(path)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()?;
+        let output_file = File::create(self.path)?;
+        let mut encoder = GzEncoder::new(output_file, Compression::default());
 
-        let cpio_cmd = Command::new("cpio")
-            .args(&["-H", "newc", "-o"])
-            .current_dir(path)
-            .stdin(find_cmd.stdout.expect("find should have output"))
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()?;
+        let tmp_root = self.tmp.path();
+        archive::write_archive(tmp_root, &mut encoder)?;
 
-        let gzip_cmd = Command::new("gzip")
-            .current_dir(path)
-            .stdin(cpio_cmd.stdout.expect("cpio should have output"))
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .output()?;
-
-        fs::write(self.path, gzip_cmd.stdout)?;
         Ok(())
     }
 }
 
 impl Builder {
-    fn add_elf<P>(&mut self, path: PathBuf, dest: P) -> Result<()>
+    fn add_elf<P>(&mut self, path: PathBuf, dest: P) -> io::Result<()>
     where
         P: Into<PathBuf>,
     {
@@ -218,7 +200,7 @@ impl Builder {
             };
 
             let dest = self.tmp.path().join(dest.into()).join(filename);
-            fs::copy(path, dest)?;
+            copy_and_chown(path, dest)?;
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
@@ -229,7 +211,7 @@ impl Builder {
         Ok(())
     }
 
-    fn add_dependencies(&mut self, elf: Elf) -> Result<()> {
+    fn add_dependencies(&mut self, elf: Elf) -> io::Result<()> {
         let libraries = elf.libraries;
 
         if !libraries.is_empty() {
@@ -255,7 +237,7 @@ impl Builder {
         Ok(())
     }
 
-    fn depmod(&self) -> Result<()> {
+    fn depmod(&self) -> io::Result<()> {
         Command::new("depmod")
             .args(&[
                 "-b",
@@ -270,7 +252,7 @@ impl Builder {
     }
 }
 
-fn parse_elf<'a, T>(data: &'a T) -> Result<Elf<'a>>
+fn parse_elf<'a, T>(data: &'a T) -> io::Result<Elf<'a>>
 where
     T: AsRef<[u8]>,
 {
@@ -282,7 +264,21 @@ where
     })
 }
 
-fn get_kernel_version() -> Result<String> {
+fn copy_and_chown<P>(source: P, dest: P) -> io::Result<()>
+where
+    P: AsRef<Path>,
+{
+    fs::copy(&source, &dest)?;
+
+    unsafe {
+        let c_dest = CString::new(dest.as_ref().as_os_str().as_bytes()).unwrap();
+        libc::chown(c_dest.as_ptr(), 0, 0);
+    }
+
+    Ok(())
+}
+
+fn get_kernel_version() -> io::Result<String> {
     let version = unsafe {
         let mut buf = MaybeUninit::uninit();
         let ret = libc::uname(buf.as_mut_ptr());
