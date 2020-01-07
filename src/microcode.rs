@@ -52,9 +52,8 @@ impl Builder {
 
     pub(crate) fn build<P>(self, output: P) -> Result<()>
     where
-        P: Into<PathBuf>,
+        P: AsRef<Path>,
     {
-        let output = output.into();
         info!("Writing microcode cpio to: {}", output.to_string_lossy());
 
         let path = self.tmp.path();
