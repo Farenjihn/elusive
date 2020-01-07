@@ -6,8 +6,9 @@ use flate2::Compression;
 use goblin::elf::Elf;
 use log::info;
 use std::collections::HashSet;
-use std::ffi::{CStr, CString};
+use std::ffi::{CStr, CString, OsStr};
 use std::fs::File;
+use std::io::{Read, Write};
 use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
@@ -164,21 +165,24 @@ impl Builder {
         Ok(())
     }
 
-    pub(crate) fn build<P>(self, output: P, ucode: Option<P>) -> io::Result<()>
+    pub(crate) fn build<P>(self, path: P, ucode: Option<P>) -> io::Result<()>
     where
         P: Into<PathBuf>,
     {
-        let output = output.into();
-        info!("Writing initramfs to: {}", output.to_string_lossy());
+        let path = path.into();
+        let mut output_file = maybe_stdout(&path)?;
 
-        let mut output_file = File::create(&output)?;
         if let Some(ucode) = ucode {
-            let mut file = File::open(ucode.into())?;
+            let ucode = ucode.into();
+            info!("Adding microcode bundle from: {}", ucode.to_string_lossy());
+
+            let mut file = maybe_stdin(&ucode)?;
             io::copy(&mut file, &mut output_file)?;
         }
 
         let mut encoder = GzEncoder::new(output_file, Compression::default());
 
+        info!("Writing initramfs to: {}", path.to_string_lossy());
         let tmp_root = self.tmp.path();
         archive::write_archive(tmp_root, &mut encoder)?;
 
@@ -283,6 +287,28 @@ where
     }
 
     Ok(())
+}
+
+fn maybe_stdin<P>(path: P) -> io::Result<Box<dyn Read>>
+where
+    P: AsRef<Path>,
+{
+    if path.as_ref() == OsStr::new("-") {
+        Ok(Box::new(io::stdin()))
+    } else {
+        Ok(Box::new(File::open(&path)?))
+    }
+}
+
+fn maybe_stdout<P>(path: P) -> io::Result<Box<dyn Write>>
+where
+    P: AsRef<Path>,
+{
+    if path.as_ref() == OsStr::new("-") {
+        Ok(Box::new(io::stdout()))
+    } else {
+        Ok(Box::new(File::create(&path)?))
+    }
 }
 
 fn get_kernel_version() -> io::Result<String> {
