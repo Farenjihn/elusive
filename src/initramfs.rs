@@ -171,7 +171,12 @@ impl Builder {
         let output = output.into();
         info!("Writing initramfs to: {}", output.to_string_lossy());
 
-        let output_file = File::create(output)?;
+        let mut output_file = File::create(&output)?;
+        if let Some(ucode) = ucode {
+            let mut file = File::open(ucode.into())?;
+            io::copy(&mut file, &mut output_file)?;
+        }
+
         let mut encoder = GzEncoder::new(output_file, Compression::default());
 
         let tmp_root = self.tmp.path();
