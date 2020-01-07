@@ -12,9 +12,10 @@ use std::io::{Read, Write};
 use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::{fs, io, os::unix};
 use tempfile::TempDir;
+use walkdir::WalkDir;
 
 const ROOT_DIRS: [&str; 10] = [
     "dev", "etc", "mnt", "proc", "run", "sys", "tmp", "usr/bin", "usr/lib", "var",
@@ -106,25 +107,29 @@ impl Builder {
         info!("Adding kernel module: {}", name);
 
         let modules_path = format!("/lib/modules/{}/", kernel_version);
-        let module_filename = format!("{}.ko.*", name);
+        let module_filename = format!("{}.ko", name);
 
-        let find_cmd = Command::new("find")
-            .args(&[&modules_path, "-name", &module_filename])
-            .stdout(Stdio::piped())
-            .output()?;
+        let found = WalkDir::new(&modules_path).into_iter().find(|entry| {
+            let path = entry
+                .as_ref()
+                .expect("entry should be a valid file")
+                .path()
+                .to_str()
+                .expect("entry should be valid utf8");
 
-        if find_cmd.stdout.is_empty() {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("module not found: {}", name),
-            ));
-        }
+            path.contains(&module_filename)
+        });
 
-        let output = std::str::from_utf8(&find_cmd.stdout)
-            .expect("find should return a valid utf8 string")
-            .trim();
+        let source = match found {
+            Some(path) => path?.into_path(),
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("module not found: {}", name),
+                ))
+            }
+        };
 
-        let source = PathBuf::from(output);
         let target = self.tmp.path().join(
             source
                 .parent()
