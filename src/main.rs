@@ -1,12 +1,14 @@
+mod archive;
 mod config;
 mod initramfs;
+mod newc;
 
 use config::Config;
 
 use clap::{App, AppSettings, Arg, SubCommand};
+use env_logger::Env;
 use std::error::Error;
 use std::fs;
-use env_logger::Env;
 
 const CONFIG_PATH: &str = "/etc/elusive.toml";
 
