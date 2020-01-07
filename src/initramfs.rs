@@ -167,13 +167,13 @@ impl Builder {
 
     pub(crate) fn build<P>(self, path: P, ucode: Option<P>) -> io::Result<()>
     where
-        P: Into<PathBuf>,
+        P: AsRef<Path>,
     {
-        let path = path.into();
+        let path = path.as_ref();
         let mut output_file = maybe_stdout(&path)?;
 
         if let Some(ucode) = ucode {
-            let ucode = ucode.into();
+            let ucode = ucode.as_ref();
             info!("Adding microcode bundle from: {}", ucode.to_string_lossy());
 
             let mut file = maybe_stdin(&ucode)?;
@@ -193,7 +193,7 @@ impl Builder {
 impl Builder {
     fn add_elf<P>(&mut self, path: PathBuf, dest: P) -> io::Result<()>
     where
-        P: Into<PathBuf>,
+        P: AsRef<Path>,
     {
         if path.exists() {
             let bin = fs::read(path.clone())?;
@@ -210,7 +210,7 @@ impl Builder {
                 }
             };
 
-            let dest = self.tmp.path().join(dest.into()).join(filename);
+            let dest = self.tmp.path().join(dest.as_ref()).join(filename);
             copy_and_chown(path, dest)?;
         } else {
             return Err(io::Error::new(

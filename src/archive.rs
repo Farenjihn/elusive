@@ -3,17 +3,17 @@ use crate::newc::EntryBuilder;
 use log::error;
 use std::fs::File;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
 use std::{fs, io};
 use walkdir::WalkDir;
 
 pub(crate) fn write_archive<P, O>(root_dir: P, mut out: &mut O) -> io::Result<()>
 where
-    P: Into<PathBuf> + Clone,
+    P: AsRef<Path> + Clone,
     O: Write,
 {
-    let root_dir = Arc::new(root_dir.into());
+    let root_dir = Arc::new(root_dir);
 
     WalkDir::new(root_dir.clone().as_ref())
         .into_iter()
