@@ -80,8 +80,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     match matches.subcommand() {
         ("initramfs", Some(initramfs)) => {
             let output = initramfs.value_of("output").unwrap();
+            let ucode = initramfs.value_of("ucode");
             let kver = initramfs.value_of("kver").map(|kver| kver.into());
-            let ucode = initramfs.value_of("ucode").map(|ucode| ucode.into());
 
             let builder = initramfs::Builder::from_config(config.initramfs, kver /*ucode*/)?;
             builder.build(output, ucode)?;
