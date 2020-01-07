@@ -1,8 +1,10 @@
 mod archive;
 mod config;
 mod initramfs;
-mod microcode;
 mod newc;
+
+#[cfg(features = "beta-ucode")]
+mod microcode;
 
 use config::Config;
 
@@ -17,7 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let env = Env::default().filter_or("RUST_LOG", "info");
     env_logger::init_from_env(env);
 
-    let matches = App::new("elusive")
+    let mut app = App::new("elusive")
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg(
             Arg::with_name("config")
@@ -52,8 +54,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .required(true)
                         .help("Path where the initramfs will be written"),
                 ),
-        )
-        .subcommand(
+        );
+
+    if cfg!(features = "beta-ucode") {
+        app = app.subcommand(
             SubCommand::with_name("microcode")
                 .about("Generate a cpio archive for your CPU microcode")
                 .arg(
@@ -64,8 +68,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .required(true)
                         .help("Path where the microcode archive will be written"),
                 ),
-        )
-        .get_matches();
+        );
+    }
+
+    let matches = app.get_matches();
 
     let config_path = matches.value_of("config").unwrap_or_else(|| CONFIG_PATH);
     let data = fs::read(config_path)?;
@@ -80,6 +86,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let builder = initramfs::Builder::from_config(config.initramfs, kver /*ucode*/)?;
             builder.build(output, ucode)?;
         }
+        #[cfg(features = "beta-ucode")]
         ("microcode", Some(microcode)) => {
             let output = microcode.value_of("output").unwrap();
 
