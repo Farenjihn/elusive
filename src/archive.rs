@@ -1,76 +1,57 @@
 use crate::newc::EntryBuilder;
 
-use log::error;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::sync::Arc;
 use std::{fs, io};
 use walkdir::WalkDir;
 
-pub(crate) fn write_archive<P, O>(root_dir: P, mut out: &mut O) -> io::Result<()>
+pub(crate) fn write_archive<P, O>(root_dir: P, out: &mut O) -> io::Result<()>
 where
     P: AsRef<Path> + Clone,
     O: Write,
 {
-    let root_dir = Arc::new(root_dir);
-
-    WalkDir::new(root_dir.clone().as_ref())
+    let walk = WalkDir::new(root_dir.clone().as_ref())
         .into_iter()
         .skip(1)
-        .enumerate()
-        .fold(&mut out, |out, (index, entry)| {
-            let res = entry
-                .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
-                .and_then(|entry| {
-                    let name = entry
-                        .path()
-                        .strip_prefix(root_dir.clone().as_ref())?
-                        .to_string_lossy();
+        .enumerate();
 
-                    let metadata = entry.metadata()?;
-                    let ty = metadata.file_type();
+    for (index, dir_entry) in walk {
+        let dir_entry = dir_entry?;
+        let name = dir_entry
+            .path()
+            .strip_prefix(root_dir.clone().as_ref())
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
+            .to_string_lossy();
 
-                    let builder = match ty {
-                        _ if ty.is_dir() => EntryBuilder::directory(&name),
-                        _ if ty.is_file() => {
-                            let file = File::open(entry.path())?;
-                            EntryBuilder::file(&name, file)
-                        }
-                        _ if ty.is_symlink() => {
-                            let path = fs::read_link(entry.path())?;
-                            EntryBuilder::symlink(&name, path)
-                        }
-                        _ => unreachable!(),
-                    };
+        let metadata = dir_entry.metadata()?;
+        let ty = metadata.file_type();
 
-                    let entry = builder.with_metadata(metadata).ino(index as u64).build();
-                    Ok(entry)
-                });
-
-            match res {
-                Ok(entry) => {
-                    let mut buf = Vec::new();
-                    let res = entry
-                        .write_to_buf(&mut buf)
-                        .and_then(|_| out.write_all(&buf));
-
-                    if let Err(err) = res {
-                        error!("Error while writing entry: {}", err);
-                    }
-                }
-                Err(err) => {
-                    error!("Error while walking tmpdir: {}", err);
-                }
+        let builder = match ty {
+            _ if ty.is_dir() => EntryBuilder::directory(&name),
+            _ if ty.is_file() => {
+                let file = File::open(dir_entry.path())?;
+                EntryBuilder::file(&name, file)
             }
+            _ if ty.is_symlink() => {
+                let path = fs::read_link(dir_entry.path())?;
+                EntryBuilder::symlink(&name, path)
+            }
+            _ => unreachable!(),
+        };
 
-            out
-        });
+        let mut data = Vec::new();
+        let entry = builder.with_metadata(metadata).ino(index as u64).build();
+        entry.write_to_buf(&mut data)?;
 
-    let trailer = EntryBuilder::trailer().ino(0).build();
+        out.write_all(&data)?;
+    }
+
     let mut buf = Vec::new();
 
+    let trailer = EntryBuilder::trailer().ino(0).build();
     trailer.write_to_buf(&mut buf)?;
+
     out.write_all(&buf)?;
 
     Ok(())
