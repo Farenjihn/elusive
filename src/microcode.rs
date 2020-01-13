@@ -46,7 +46,7 @@ impl Builder {
         let tmp_path = tmp.path();
 
         let ucode_tree = tmp_path.join(UCODE_TREE);
-        fs::create_dir_all(ucode_tree)?;
+        fs::create_dir_all(&ucode_tree)?;
 
         if let (None, None) = (&self.amd, &self.intel) {
             warn!("Nothing to do...");
@@ -54,11 +54,11 @@ impl Builder {
         }
 
         if let Some(amd) = &self.amd {
-            self.add_amd(amd, tmp_path)?;
+            self.add_amd(amd, &ucode_tree)?;
         }
 
         if let Some(intel) = &self.intel {
-            self.add_intel(intel, tmp_path)?;
+            self.add_intel(intel, &ucode_tree)?;
         }
 
         let mut output_file = utils::maybe_stdout(&output)?;
