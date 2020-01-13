@@ -2,10 +2,10 @@
 init = "init"
 
 [[initramfs.bin]]
-path = "/usr/bin/busybox"
+path = "/bin/busybox"
 
 [[initramfs.bin]]
-path = "/usr/bin/cryptsetup"
+path = "/sbin/cryptsetup"
 
 [[initramfs.lib]]
 path = "/lib64/ld-linux-x86-64.so.2"
@@ -13,6 +13,6 @@ path = "/lib64/ld-linux-x86-64.so.2"
 [[initramfs.module]]
 name = "btrfs"
 
-# [microcode]
-# amd = ""
-# intel = ""
+[microcode]
+amd = "/lib/firmware/amd-ucode"
+intel = "/lib/firmware/intel-ucode"
