@@ -1,21 +1,16 @@
-use crate::archive;
 use crate::config::Initramfs;
+use crate::newc::Archive;
+use crate::utils;
 
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use goblin::elf::Elf;
 use log::info;
-use std::collections::HashSet;
-use std::ffi::{CStr, CString, OsStr};
-use std::fs::File;
-use std::io::{Read, Write};
-use std::mem::MaybeUninit;
-use std::os::unix::ffi::OsStrExt;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io, os::unix};
 use tempfile::TempDir;
-use walkdir::WalkDir;
 
 const ROOT_DIRS: [&str; 10] = [
     "dev", "etc", "mnt", "proc", "run", "sys", "tmp", "usr/bin", "usr/lib", "var",
@@ -30,26 +25,20 @@ const ROOT_SYMLINKS: [(&str, &str); 4] = [
 
 const LIB_LOOKUP_DIRS: [&str; 2] = ["/lib64", "/usr/lib64"];
 
+#[derive(PartialEq, Eq, Hash, Clone)]
+pub(crate) struct Entry {
+    from: PathBuf,
+    to: PathBuf,
+}
+
 pub(crate) struct Builder {
-    tmp: TempDir,
-    set: HashSet<PathBuf>,
+    map: HashMap<PathBuf, Entry>,
 }
 
 impl Builder {
     pub(crate) fn new() -> io::Result<Self> {
-        let tmp = TempDir::new()?;
-
-        for dir in &ROOT_DIRS {
-            fs::create_dir_all(tmp.path().join(dir))?;
-        }
-
-        for link in &ROOT_SYMLINKS {
-            unix::fs::symlink(link.1, tmp.path().join(link.0))?;
-        }
-
         let builder = Builder {
-            tmp,
-            set: HashSet::new(),
+            map: HashMap::new(),
         };
 
         Ok(builder)
@@ -61,19 +50,6 @@ impl Builder {
     ) -> io::Result<Self> {
         let mut builder = Builder::new()?;
         builder.add_init(config.init)?;
-
-        if let Some(modules) = config.module {
-            let kernel_version = match kernel_version {
-                Some(kernel_version) => kernel_version,
-                None => get_kernel_version()?,
-            };
-
-            for module in modules {
-                builder.add_module(&kernel_version, module.name)?;
-            }
-
-            builder.depmod()?;
-        }
 
         if let Some(binaries) = config.bin {
             for binary in binaries {
@@ -87,84 +63,77 @@ impl Builder {
             }
         }
 
+        if let Some(modules) = config.module {
+            let kernel_version = match kernel_version {
+                Some(kernel_version) => kernel_version,
+                None => utils::get_kernel_version()?,
+            };
+
+            let modules_path = format!("/lib/modules/{}/", kernel_version);
+            for module in modules {
+                let module_filename = format!("{}.ko", module.name);
+
+                let found = utils::find_file(&[&modules_path], &module_filename);
+                let path = match found {
+                    Some(path) => path,
+                    None => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::NotFound,
+                            format!("module not found: {}", module.name),
+                        ))
+                    }
+                };
+
+                builder.add_module(path)?;
+            }
+        }
+
         Ok(builder)
     }
 
     pub(crate) fn add_init(&mut self, path: PathBuf) -> io::Result<()> {
         info!("Adding init script: {}", path.to_string_lossy());
 
-        if path.exists() {
-            let dest = self.tmp.path().join("init");
-            copy_and_chown(path, dest)?;
-        } else {
-            return Err(io::Error::new(io::ErrorKind::NotFound, "init not found"));
-        }
+        self.map.insert(
+            path.clone(),
+            Entry {
+                from: path,
+                to: PathBuf::from("/init"),
+            },
+        );
 
         Ok(())
     }
 
-    pub(crate) fn add_module(&mut self, kernel_version: &str, name: String) -> io::Result<()> {
-        info!("Adding kernel module: {}", name);
+    pub(crate) fn add_module(&mut self, path: PathBuf) -> io::Result<()> {
+        if !self.map.contains_key(&path) {
+            info!("Adding kernel module: {}", path.to_string_lossy());
 
-        let modules_path = format!("/lib/modules/{}/", kernel_version);
-        let module_filename = format!("{}.ko", name);
-
-        let found = WalkDir::new(&modules_path).into_iter().find(|entry| {
-            let path = entry
-                .as_ref()
-                .expect("entry should be a valid file")
-                .path()
-                .to_str()
-                .expect("entry should be valid utf8");
-
-            path.contains(&module_filename)
-        });
-
-        let source = match found {
-            Some(path) => path?.into_path(),
-            None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    format!("module not found: {}", name),
-                ))
-            }
-        };
-
-        let target = self.tmp.path().join(
-            source
-                .parent()
-                .expect("path should have parent")
-                .strip_prefix("/")
-                .expect("parent should have a leading slash"),
-        );
-
-        if !target.exists() {
-            fs::create_dir_all(&target)?;
+            self.map.insert(
+                path.clone(),
+                Entry {
+                    from: path.clone(),
+                    to: path.clone(),
+                },
+            );
         }
-
-        let dest = target.join(source.file_name().expect("path should have filename"));
-        copy_and_chown(source, dest)?;
 
         Ok(())
     }
 
     pub(crate) fn add_binary(&mut self, path: PathBuf) -> io::Result<()> {
-        if !self.set.contains(&path) {
+        if !self.map.contains_key(&path) {
             info!("Adding binary: {}", path.to_string_lossy());
-            self.set.insert(path.clone());
-
-            return self.add_elf(path, "usr/bin");
+            return self.add_elf(path, "/usr/bin");
         }
 
         Ok(())
     }
 
     pub(crate) fn add_library(&mut self, path: PathBuf) -> io::Result<()> {
-        if !self.set.contains(&path) {
+        if !self.map.contains_key(&path) {
             info!("Adding library: {}", path.to_string_lossy());
-            self.set.insert(path.clone());
-
-            return self.add_elf(path, "usr/lib");
+            return self.add_elf(path, "/usr/lib");
         }
 
         Ok(())
@@ -174,22 +143,46 @@ impl Builder {
     where
         P: AsRef<Path>,
     {
+        let tmp = TempDir::new()?;
+        let tmp_path = tmp.path();
+
+        for dir in &ROOT_DIRS {
+            fs::create_dir_all(tmp.path().join(dir))?;
+        }
+
+        for link in &ROOT_SYMLINKS {
+            unix::fs::symlink(link.1, tmp.path().join(link.0))?;
+        }
+
+        for (_, entry) in &self.map {
+            let source = &entry.from;
+            let dest = tmp_path.join(
+                &entry
+                    .to
+                    .strip_prefix("/")
+                    .expect("path should have a leading /"),
+            );
+
+            utils::copy_and_chown(&source, dest)?;
+        }
+
+        self.depmod(tmp_path)?;
+
         let path = path.as_ref();
-        let mut output_file = maybe_stdout(&path)?;
+        let mut output_file = utils::maybe_stdout(&path)?;
 
         if let Some(ucode) = ucode {
             let ucode = ucode.as_ref();
             info!("Adding microcode bundle from: {}", ucode.to_string_lossy());
 
-            let mut file = maybe_stdin(&ucode)?;
+            let mut file = utils::maybe_stdin(&ucode)?;
             io::copy(&mut file, &mut output_file)?;
         }
 
         let mut encoder = GzEncoder::new(output_file, Compression::default());
 
         info!("Writing initramfs to: {}", path.to_string_lossy());
-        let tmp_root = self.tmp.path();
-        archive::write_archive(tmp_root, &mut encoder)?;
+        Archive::from_root(tmp_path, &mut encoder)?;
 
         Ok(())
     }
@@ -200,29 +193,41 @@ impl Builder {
     where
         P: AsRef<Path>,
     {
-        if path.exists() {
-            let bin = fs::read(path.clone())?;
-            let elf = parse_elf(&bin)?;
-            self.add_dependencies(elf)?;
-
-            let filename = match path.file_name() {
-                Some(filename) => filename,
-                None => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        format!("binary path invalid: {}", path.to_string_lossy()),
-                    ))
-                }
-            };
-
-            let dest = self.tmp.path().join(dest.as_ref()).join(filename);
-            copy_and_chown(path, dest)?;
-        } else {
+        if !path.exists() {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
                 format!("binary not found: {}", path.to_string_lossy()),
             ));
         }
+
+        let bin = fs::read(path.clone())?;
+        let elf = Elf::parse(&bin).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "only ELF binaries are supported",
+            )
+        })?;
+
+        self.add_dependencies(elf)?;
+
+        let filename = match path.file_name() {
+            Some(filename) => filename,
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("binary path invalid: {}", path.to_string_lossy()),
+                ))
+            }
+        };
+
+        let dest = dest.as_ref().join(filename);
+        self.map.insert(
+            path.clone(),
+            Entry {
+                from: path,
+                to: dest,
+            },
+        );
 
         Ok(())
     }
@@ -253,12 +258,14 @@ impl Builder {
         Ok(())
     }
 
-    fn depmod(&self) -> io::Result<()> {
+    fn depmod<P>(&self, path: P) -> io::Result<()>
+    where
+        P: AsRef<Path>,
+    {
         Command::new("depmod")
             .args(&[
                 "-b",
-                self.tmp
-                    .path()
+                path.as_ref()
                     .to_str()
                     .expect("tmpdir path should be valid utf8"),
             ])
@@ -266,71 +273,4 @@ impl Builder {
 
         Ok(())
     }
-}
-
-fn parse_elf<'a, T>(data: &'a T) -> io::Result<Elf<'a>>
-where
-    T: AsRef<[u8]>,
-{
-    Elf::parse(data.as_ref()).map_err(|_| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "only ELF binaries are supported",
-        )
-    })
-}
-
-fn copy_and_chown<P>(source: P, dest: P) -> io::Result<()>
-where
-    P: AsRef<Path>,
-{
-    fs::copy(&source, &dest)?;
-
-    unsafe {
-        let c_dest = CString::new(dest.as_ref().as_os_str().as_bytes()).unwrap();
-        libc::chown(c_dest.as_ptr(), 0, 0);
-    }
-
-    Ok(())
-}
-
-fn maybe_stdin<P>(path: P) -> io::Result<Box<dyn Read>>
-where
-    P: AsRef<Path>,
-{
-    if path.as_ref() == OsStr::new("-") {
-        Ok(Box::new(io::stdin()))
-    } else {
-        Ok(Box::new(File::open(&path)?))
-    }
-}
-
-fn maybe_stdout<P>(path: P) -> io::Result<Box<dyn Write>>
-where
-    P: AsRef<Path>,
-{
-    if path.as_ref() == OsStr::new("-") {
-        Ok(Box::new(io::stdout()))
-    } else {
-        Ok(Box::new(File::create(&path)?))
-    }
-}
-
-fn get_kernel_version() -> io::Result<String> {
-    let version = unsafe {
-        let mut buf = MaybeUninit::uninit();
-        let ret = libc::uname(buf.as_mut_ptr());
-
-        if ret == 0 {
-            let buf = buf.assume_init();
-            CStr::from_ptr(buf.release[..].as_ptr())
-        } else {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "could not read kernel version",
-            ));
-        }
-    };
-
-    Ok(version.to_string_lossy().into_owned())
 }

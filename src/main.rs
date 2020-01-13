@@ -1,7 +1,7 @@
-mod archive;
 mod config;
 mod initramfs;
 mod newc;
+mod utils;
 
 #[cfg(features = "beta-ucode")]
 mod microcode;

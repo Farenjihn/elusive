@@ -1,13 +1,67 @@
 use std::ffi::CString;
-use std::fs::File;
-use std::fs::Metadata;
-use std::io;
+use std::fs::{File, Metadata};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::MetadataExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::{fs, io};
+use walkdir::WalkDir;
 
 const MAGIC: &[u8] = b"070701";
 const TRAILER: &str = "TRAILER!!!";
+
+pub(crate) struct Archive;
+
+impl Archive {
+    pub(crate) fn from_root<P, O>(root_dir: P, out: &mut O) -> io::Result<()>
+    where
+        P: AsRef<Path> + Clone,
+        O: Write,
+    {
+        let walk = WalkDir::new(root_dir.clone().as_ref())
+            .into_iter()
+            .skip(1)
+            .enumerate();
+
+        let mut buf = Vec::new();
+        for (index, dir_entry) in walk {
+            let dir_entry = dir_entry?;
+            let name = dir_entry
+                .path()
+                .strip_prefix(root_dir.clone().as_ref())
+                .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
+                .to_string_lossy();
+
+            let metadata = dir_entry.metadata()?;
+            let ty = metadata.file_type();
+
+            let builder = match ty {
+                _ if ty.is_dir() => EntryBuilder::directory(&name),
+                _ if ty.is_file() => {
+                    let file = File::open(dir_entry.path())?;
+                    EntryBuilder::file(&name, file)
+                }
+                _ if ty.is_symlink() => {
+                    let path = fs::read_link(dir_entry.path())?;
+                    EntryBuilder::symlink(&name, path)
+                }
+                _ => unreachable!(),
+            };
+
+            let entry = builder.with_metadata(metadata).ino(index as u64).build();
+            entry.write_to_buf(&mut buf)?;
+
+            out.write_all(&buf)?;
+            buf.clear();
+        }
+
+        let trailer = EntryBuilder::trailer().ino(0).build();
+        trailer.write_to_buf(&mut buf)?;
+
+        out.write_all(&buf)?;
+
+        Ok(())
+    }
+}
 
 pub(crate) enum EntryType {
     Directory,
