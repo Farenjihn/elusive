@@ -4,6 +4,7 @@ use std::path::PathBuf;
 #[derive(Deserialize, Debug)]
 pub(crate) struct Config {
     pub(crate) initramfs: Initramfs,
+    pub(crate) microcode: Option<Microcode>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -27,4 +28,10 @@ pub(crate) struct Binary {
 #[derive(Deserialize, Debug)]
 pub(crate) struct Library {
     pub(crate) path: PathBuf,
+}
+
+#[derive(Deserialize, Debug)]
+pub(crate) struct Microcode {
+    pub(crate) amd: Option<PathBuf>,
+    pub(crate) intel: Option<PathBuf>,
 }

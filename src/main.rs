@@ -1,15 +1,14 @@
 mod config;
 mod initramfs;
+mod microcode;
 mod newc;
 mod utils;
-
-#[cfg(features = "beta-ucode")]
-mod microcode;
 
 use config::Config;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 use env_logger::Env;
+use log::warn;
 use std::error::Error;
 use std::fs;
 
@@ -19,7 +18,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let env = Env::default().filter_or("RUST_LOG", "info");
     env_logger::init_from_env(env);
 
-    let mut app = App::new("elusive")
+    let app = App::new("elusive")
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg(
             Arg::with_name("config")
@@ -54,10 +53,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .required(true)
                         .help("Path where the initramfs will be written"),
                 ),
-        );
-
-    if cfg!(features = "beta-ucode") {
-        app = app.subcommand(
+        )
+        .subcommand(
             SubCommand::with_name("microcode")
                 .about("Generate a cpio archive for your CPU microcode")
                 .arg(
@@ -69,7 +66,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .help("Path where the microcode archive will be written"),
                 ),
         );
-    }
 
     let matches = app.get_matches();
 
@@ -83,15 +79,18 @@ fn main() -> Result<(), Box<dyn Error>> {
             let ucode = initramfs.value_of("ucode");
             let kver = initramfs.value_of("kver").map(|kver| kver.into());
 
-            let builder = initramfs::Builder::from_config(config.initramfs, kver /*ucode*/)?;
+            let builder = initramfs::Builder::from_config(config.initramfs, kver)?;
             builder.build(output, ucode)?;
         }
-        #[cfg(features = "beta-ucode")]
         ("microcode", Some(microcode)) => {
             let output = microcode.value_of("output").unwrap();
 
-            let builder = microcode::Builder::from_config(config.microcode)?;
-            builder.build(output)?;
+            if let Some(microcode) = config.microcode {
+                let builder = microcode::Builder::from_config(microcode)?;
+                builder.build(output)?;
+            } else {
+                warn!("No configuration provided for microcode generation");
+            }
         }
         (subcommand, _) => unreachable!("unknown subcommand {}", subcommand),
     }
