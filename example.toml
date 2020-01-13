@@ -8,7 +8,11 @@ path = "/usr/bin/busybox"
 path = "/usr/bin/cryptsetup"
 
 [[initramfs.lib]]
-path = "/usr/lib/ld-linux-x86-64.so.2"
+path = "/lib64/ld-linux-x86-64.so.2"
 
 [[initramfs.module]]
 name = "btrfs"
+
+# [microcode]
+# amd = ""
+# intel = ""

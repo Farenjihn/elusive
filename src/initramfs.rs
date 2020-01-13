@@ -113,7 +113,7 @@ impl Builder {
                 path.clone(),
                 Entry {
                     from: path.clone(),
-                    to: path.clone(),
+                    to: path,
                 },
             );
         }
@@ -139,10 +139,13 @@ impl Builder {
         Ok(())
     }
 
-    pub(crate) fn build<P>(self, path: P, ucode: Option<P>) -> io::Result<()>
+    pub(crate) fn build<P>(self, output: P, ucode: Option<P>) -> io::Result<()>
     where
         P: AsRef<Path>,
     {
+        let output = output.as_ref();
+        info!("Writing initramfs to: {}", output.to_string_lossy());
+
         let tmp = TempDir::new()?;
         let tmp_path = tmp.path();
 
@@ -154,7 +157,7 @@ impl Builder {
             unix::fs::symlink(link.1, tmp.path().join(link.0))?;
         }
 
-        for (_, entry) in &self.map {
+        for entry in self.map.values() {
             let source = &entry.from;
             let dest = tmp_path.join(
                 &entry
@@ -167,9 +170,7 @@ impl Builder {
         }
 
         self.depmod(tmp_path)?;
-
-        let path = path.as_ref();
-        let mut output_file = utils::maybe_stdout(&path)?;
+        let mut output_file = utils::maybe_stdout(&output)?;
 
         if let Some(ucode) = ucode {
             let ucode = ucode.as_ref();
@@ -180,8 +181,6 @@ impl Builder {
         }
 
         let mut encoder = GzEncoder::new(output_file, Compression::default());
-
-        info!("Writing initramfs to: {}", path.to_string_lossy());
         Archive::from_root(tmp_path, &mut encoder)?;
 
         Ok(())

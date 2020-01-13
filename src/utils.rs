@@ -1,10 +1,10 @@
 use std::ffi::{CStr, CString, OsStr};
 use std::fs::File;
-use std::{fs, io};
 use std::io::{Read, Write};
 use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
+use std::{fs, io};
 use walkdir::WalkDir;
 
 pub(crate) fn maybe_stdin<P>(path: P) -> io::Result<Box<dyn Read>>

@@ -23,7 +23,3 @@ features = ["std", "elf32", "elf64", "endian_fd"]
 [dependencies.serde]
 version = "1.0.104"
 features = ["derive"]
-
-[features]
-default = []
-beta-ucode = []
