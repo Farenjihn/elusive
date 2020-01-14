@@ -1,11 +1,9 @@
-use std::ffi::{CStr, CString, OsStr};
+use std::ffi::{CString, OsStr};
 use std::fs::File;
 use std::io::{Read, Write};
-use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::{fs, io};
-use walkdir::WalkDir;
 
 pub(crate) fn maybe_stdin<P>(path: P) -> io::Result<Box<dyn Read>>
 where
@@ -29,35 +27,10 @@ where
     }
 }
 
-pub(crate) fn find_file<T, P>(in_dirs: T, filename: &str) -> Option<PathBuf>
+pub(crate) fn copy_and_chown<S, D>(source: S, dest: D) -> io::Result<()>
 where
-    T: AsRef<[P]>,
-    P: AsRef<Path>,
-{
-    for dir in in_dirs.as_ref() {
-        let found = WalkDir::new(dir).into_iter().find(|entry| {
-            let path = entry
-                .as_ref()
-                .expect("entry should be a valid file")
-                .path()
-                .to_str()
-                .expect("entry should be valid utf8");
-
-            path.contains(&filename)
-        });
-
-        if let Some(found) = found {
-            return found.ok().map(|entry| entry.into_path());
-        }
-    }
-
-    None
-}
-
-pub(crate) fn copy_and_chown<PSrc, PDst>(source: PSrc, dest: PDst) -> io::Result<()>
-where
-    PSrc: AsRef<Path>,
-    PDst: AsRef<Path>,
+    S: AsRef<Path>,
+    D: AsRef<Path>,
 {
     let parent = dest.as_ref().parent().expect("path should have a parent");
 
@@ -70,23 +43,4 @@ where
     }
 
     Ok(())
-}
-
-pub(crate) fn get_kernel_version() -> io::Result<String> {
-    let version = unsafe {
-        let mut buf = MaybeUninit::uninit();
-        let ret = libc::uname(buf.as_mut_ptr());
-
-        if ret == 0 {
-            let buf = buf.assume_init();
-            CStr::from_ptr(buf.release[..].as_ptr())
-        } else {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "could not read kernel version",
-            ));
-        }
-    };
-
-    Ok(version.to_string_lossy().into_owned())
 }
