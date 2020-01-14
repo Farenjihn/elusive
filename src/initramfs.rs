@@ -5,8 +5,11 @@ use crate::utils;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use goblin::elf::Elf;
-use log::info;
+use log::{error, info};
 use std::collections::HashMap;
+use std::ffi::{CStr, CString, OsStr};
+use std::mem::MaybeUninit;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io, os::unix};
@@ -23,7 +26,7 @@ const ROOT_SYMLINKS: [(&str, &str); 4] = [
     ("sbin", "usr/bin"),
 ];
 
-const LIB_LOOKUP_DIRS: [&str; 2] = ["/lib64", "/usr/lib64"];
+// const LIB_LOOKUP_DIRS: [&str; 2] = ["/lib64", "/usr/lib64"];
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub(crate) struct Entry {
@@ -64,26 +67,8 @@ impl Builder {
         }
 
         if let Some(modules) = config.module {
-            let kernel_version = match kernel_version {
-                Some(kernel_version) => kernel_version,
-                None => utils::get_kernel_version()?,
-            };
-
-            let modules_path = format!("/lib/modules/{}/", kernel_version);
             for module in modules {
-                let module_filename = format!("{}.ko", module.name);
-
-                let found = utils::find_file(&[&modules_path], &module_filename);
-                let path = match found {
-                    Some(path) => path,
-                    None => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::NotFound,
-                            format!("module not found: {}", module.name),
-                        ))
-                    }
-                };
-
+                let path = builder.modinfo(module.name, &kernel_version)?;
                 builder.add_module(path)?;
             }
         }
@@ -236,18 +221,36 @@ impl Builder {
 
         if !libraries.is_empty() {
             for lib in libraries {
-                let path = match LIB_LOOKUP_DIRS
-                    .iter()
-                    .map(|dir| Path::new(dir).join(lib))
-                    .find(|path| path.exists())
-                {
-                    Some(path) => path,
-                    None => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::NotFound,
-                            "dynamic dependency not found",
-                        ))
+                let path = unsafe {
+                    let name = CString::new(lib).unwrap();
+                    let handle = libc::dlopen(name.as_ptr(), libc::RTLD_LAZY);
+
+                    let mut map: MaybeUninit<*mut link_map> = MaybeUninit::uninit();
+                    let ret = dlinfo(
+                        handle,
+                        RTLD_DI_LINKMAP,
+                        map.as_mut_ptr() as *mut libc::c_void,
+                    );
+
+                    if ret < 0 {
+                        error!("Failed to get path to dynamic dependency for {}", lib);
+                        return Err(io::Error::new(io::ErrorKind::Other, "dlinfo failed"));
                     }
+
+                    let map = map.assume_init();
+                    let name = CStr::from_ptr((*map).l_name);
+                    let path = PathBuf::from(OsStr::from_bytes(name.to_bytes()));
+
+                    let ret = libc::dlclose(handle);
+                    if ret < 0 {
+                        error!("Failed to close handle to dynamic dependency for {}", lib);
+                        return Err(io::Error::new(io::ErrorKind::Other, "dlclose failed"));
+                    }
+
+                    drop(map);
+                    drop(handle);
+
+                    path
                 };
 
                 self.add_library(path)?;
@@ -255,6 +258,25 @@ impl Builder {
         }
 
         Ok(())
+    }
+
+    fn modinfo<T>(&self, name: T, kernel_version: &Option<String>) -> io::Result<PathBuf>
+    where
+        T: AsRef<str>,
+    {
+        let mut command = Command::new("modinfo");
+
+        if let Some(version) = kernel_version {
+            command.args(&["-k", &version]);
+        }
+
+        command.args(&["-n", name.as_ref()]).output().map(|output| {
+            let path = std::str::from_utf8(&output.stdout)
+                .expect("modinfo output should be valid utf8")
+                .trim_end();
+
+            path.into()
+        })
     }
 
     fn depmod<P>(&self, path: P) -> io::Result<()>
@@ -272,4 +294,24 @@ impl Builder {
 
         Ok(())
     }
+}
+
+// FIXME: remove this once a new version of libc is released
+
+use libc::{c_int, c_void};
+
+const RTLD_DI_LINKMAP: c_int = 2;
+
+#[repr(C)]
+struct link_map {
+    l_addr: u64,
+    l_name: *mut libc::c_char,
+    l_ld: *mut libc::c_void,
+    l_next: *mut libc::c_void,
+    l_prev: *mut libc::c_void,
+}
+
+#[link(name = "dl")]
+extern "C" {
+    pub fn dlinfo(handle: *mut c_void, request: c_int, info: *mut c_void) -> c_int;
 }
