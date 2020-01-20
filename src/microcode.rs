@@ -2,6 +2,8 @@ use crate::config::Microcode;
 use crate::newc::Archive;
 use crate::utils;
 
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use log::{info, warn};
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -61,8 +63,9 @@ impl Builder {
             self.add_intel(intel, &ucode_tree)?;
         }
 
-        let mut output_file = utils::maybe_stdout(&output)?;
-        Archive::from_root(tmp_path, &mut output_file)?;
+        let output_file = utils::maybe_stdout(&output)?;
+        let mut encoder = GzEncoder::new(output_file, Compression::default());
+        Archive::from_root(tmp_path, &mut encoder)?;
 
         Ok(())
     }
