@@ -33,9 +33,24 @@ where
     D: AsRef<Path>,
 {
     let parent = dest.as_ref().parent().expect("path should have a parent");
-
     fs::create_dir_all(parent)?;
-    fs::copy(&source, &dest)?;
+
+    let metadata = fs::metadata(&source)?;
+    let ty = metadata.file_type();
+
+    if ty.is_file() {
+        fs::copy(&source, &dest)?;
+    } else if ty.is_dir() {
+        let options = fs_extra::dir::CopyOptions {
+            overwrite: true,
+            skip_exist: false,
+            buffer_size: 64000,
+            copy_inside: true,
+            depth: 0,
+        };
+
+        fs_extra::dir::copy(&source, &dest, &options).unwrap();
+    }
 
     unsafe {
         let c_dest = CString::new(dest.as_ref().as_os_str().as_bytes()).unwrap();

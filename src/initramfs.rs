@@ -26,8 +26,6 @@ const ROOT_SYMLINKS: [(&str, &str); 4] = [
     ("sbin", "usr/bin"),
 ];
 
-// const LIB_LOOKUP_DIRS: [&str; 2] = ["/lib64", "/usr/lib64"];
-
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub(crate) struct Entry {
     from: PathBuf,
@@ -63,6 +61,12 @@ impl Builder {
         if let Some(libraries) = config.lib {
             for library in libraries {
                 builder.add_library(library.path)?;
+            }
+        }
+
+        if let Some(trees) = config.tree {
+            for tree in trees {
+                builder.add_tree(tree.source, tree.dest)?;
             }
         }
 
@@ -120,6 +124,18 @@ impl Builder {
             info!("Adding library: {}", path.to_string_lossy());
             return self.add_elf(path, "/usr/lib");
         }
+
+        Ok(())
+    }
+
+    pub(crate) fn add_tree(&mut self, source: PathBuf, dest: PathBuf) -> io::Result<()> {
+        self.map.insert(
+            source.clone(),
+            Entry {
+                from: source,
+                to: dest,
+            },
+        );
 
         Ok(())
     }
@@ -221,37 +237,37 @@ impl Builder {
 
         if !libraries.is_empty() {
             for lib in libraries {
-                let path = unsafe {
-                    let name = CString::new(lib).unwrap();
-                    let handle = libc::dlopen(name.as_ptr(), libc::RTLD_LAZY);
+                let name = CString::new(lib).unwrap();
+                let mut map: MaybeUninit<*mut link_map> = MaybeUninit::uninit();
 
-                    let mut map: MaybeUninit<*mut link_map> = MaybeUninit::uninit();
+                let (handle, ret) = unsafe {
+                    let handle = libc::dlopen(name.as_ptr(), libc::RTLD_LAZY);
                     let ret = dlinfo(
                         handle,
                         RTLD_DI_LINKMAP,
                         map.as_mut_ptr() as *mut libc::c_void,
                     );
 
-                    if ret < 0 {
-                        error!("Failed to get path to dynamic dependency for {}", lib);
-                        return Err(io::Error::new(io::ErrorKind::Other, "dlinfo failed"));
-                    }
-
-                    let map = map.assume_init();
-                    let name = CStr::from_ptr((*map).l_name);
-                    let path = PathBuf::from(OsStr::from_bytes(name.to_bytes()));
-
-                    let ret = libc::dlclose(handle);
-                    if ret < 0 {
-                        error!("Failed to close handle to dynamic dependency for {}", lib);
-                        return Err(io::Error::new(io::ErrorKind::Other, "dlclose failed"));
-                    }
-
-                    drop(map);
-                    drop(handle);
-
-                    path
+                    (handle, ret)
                 };
+
+                if ret < 0 {
+                    error!("Failed to get path to dynamic dependency for {}", lib);
+                    return Err(io::Error::new(io::ErrorKind::Other, "dlinfo failed"));
+                }
+
+                let name = unsafe {
+                    let map = map.assume_init();
+                    CStr::from_ptr((*map).l_name)
+                };
+
+                let path = PathBuf::from(OsStr::from_bytes(name.to_bytes()));
+
+                let ret = unsafe { libc::dlclose(handle) };
+                if ret < 0 {
+                    error!("Failed to close handle to dynamic dependency for {}", lib);
+                    return Err(io::Error::new(io::ErrorKind::Other, "dlclose failed"));
+                }
 
                 self.add_library(path)?;
             }

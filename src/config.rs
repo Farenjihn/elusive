@@ -13,6 +13,7 @@ pub(crate) struct Initramfs {
     pub(crate) module: Option<Vec<Module>>,
     pub(crate) bin: Option<Vec<Binary>>,
     pub(crate) lib: Option<Vec<Library>>,
+    pub(crate) tree: Option<Vec<Tree>>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -34,4 +35,10 @@ pub(crate) struct Library {
 pub(crate) struct Microcode {
     pub(crate) amd: Option<PathBuf>,
     pub(crate) intel: Option<PathBuf>,
+}
+
+#[derive(Deserialize, Debug)]
+pub(crate) struct Tree {
+    pub(crate) source: PathBuf,
+    pub(crate) dest: PathBuf,
 }
