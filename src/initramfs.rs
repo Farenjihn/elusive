@@ -243,6 +243,15 @@ impl Builder {
 
                 let (handle, ret) = unsafe {
                     let handle = libc::dlopen(name.as_ptr(), libc::RTLD_LAZY);
+                    if handle.is_null() {
+                        let error = CStr::from_ptr(libc::dlerror())
+                            .to_str()
+                            .expect("error should be valid utf8");
+
+                        error!("{}", error);
+                        return Err(io::Error::new(io::ErrorKind::Other, error));
+                    }
+
                     let ret = dlinfo(
                         handle,
                         RTLD_DI_LINKMAP,
