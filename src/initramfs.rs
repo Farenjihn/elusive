@@ -129,6 +129,7 @@ impl Builder {
     }
 
     pub(crate) fn add_tree(&mut self, source: PathBuf, dest: PathBuf) -> io::Result<()> {
+        info!("Copying filesystem tree from: {}", source.to_string_lossy());
         self.map.insert(
             source.clone(),
             Entry {
