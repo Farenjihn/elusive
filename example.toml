@@ -13,6 +13,10 @@ path = "/lib64/ld-linux-x86-64.so.2"
 [[initramfs.module]]
 name = "btrfs"
 
+[[initramfs.tree]]
+source = "/lib/udev/rules.d"
+dest = "/lib/udev/rules.d"
+
 [microcode]
 amd = "/lib/firmware/amd-ucode"
 intel = "/lib/firmware/intel-ucode"
