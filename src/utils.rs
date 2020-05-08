@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::ffi::{CString, OsStr};
 use std::fs::File;
 use std::io::{Read, Write};
@@ -5,7 +6,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::{fs, io};
 
-pub(crate) fn maybe_stdin<P>(path: P) -> io::Result<Box<dyn Read>>
+pub(crate) fn maybe_stdin<P>(path: P) -> Result<Box<dyn Read>>
 where
     P: AsRef<Path>,
 {
@@ -16,7 +17,7 @@ where
     }
 }
 
-pub(crate) fn maybe_stdout<P>(path: P) -> io::Result<Box<dyn Write>>
+pub(crate) fn maybe_stdout<P>(path: P) -> Result<Box<dyn Write>>
 where
     P: AsRef<Path>,
 {
@@ -27,7 +28,7 @@ where
     }
 }
 
-pub(crate) fn copy_and_chown<S, D>(source: S, dest: D) -> io::Result<()>
+pub(crate) fn copy_and_chown<S, D>(source: S, dest: D) -> Result<()>
 where
     S: AsRef<Path>,
     D: AsRef<Path>,

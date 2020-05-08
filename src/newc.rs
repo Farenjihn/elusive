@@ -1,9 +1,10 @@
+use anyhow::Result;
 use std::ffi::CString;
+use std::fs;
 use std::fs::{File, Metadata};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
-use std::{fs, io};
 use walkdir::WalkDir;
 
 const MAGIC: &[u8] = b"070701";
@@ -12,7 +13,7 @@ const TRAILER: &str = "TRAILER!!!";
 pub(crate) struct Archive;
 
 impl Archive {
-    pub(crate) fn from_root<P, O>(root_dir: P, out: &mut O) -> io::Result<()>
+    pub(crate) fn from_root<P, O>(root_dir: P, out: &mut O) -> Result<()>
     where
         P: AsRef<Path> + Clone,
         O: Write,
@@ -27,8 +28,7 @@ impl Archive {
             let dir_entry = dir_entry?;
             let name = dir_entry
                 .path()
-                .strip_prefix(root_dir.clone().as_ref())
-                .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
+                .strip_prefix(root_dir.clone().as_ref())?
                 .to_string_lossy();
 
             let metadata = dir_entry.metadata()?;
@@ -103,7 +103,7 @@ pub(crate) struct Entry {
 }
 
 impl Entry {
-    fn write_header(&mut self, file_size: usize, buf: &mut Vec<u8>) -> io::Result<()> {
+    fn write_header(&mut self, file_size: usize, buf: &mut Vec<u8>) -> Result<()> {
         let filename = CString::new(self.header.name.clone())?.into_bytes_with_nul();
 
         buf.reserve(6 + (13 * 8) + filename.len() + file_size);
@@ -129,7 +129,7 @@ impl Entry {
 }
 
 impl Entry {
-    pub(crate) fn write_to_buf(mut self, mut buf: &mut Vec<u8>) -> io::Result<()> {
+    pub(crate) fn write_to_buf(mut self, mut buf: &mut Vec<u8>) -> Result<()> {
         let file_size = match self.ty {
             EntryType::File(ref mut file) => {
                 let file_size = file.seek(SeekFrom::End(0))?;

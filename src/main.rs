@@ -6,15 +6,15 @@ mod utils;
 
 use config::Config;
 
+use anyhow::Result;
 use clap::{App, AppSettings, Arg, SubCommand};
 use env_logger::Env;
 use log::warn;
-use std::error::Error;
 use std::fs;
 
 const CONFIG_PATH: &str = "/etc/elusive.toml";
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
     let env = Env::default().filter_or("RUST_LOG", "info");
     env_logger::init_from_env(env);
 
