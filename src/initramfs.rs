@@ -2,6 +2,7 @@ use crate::config::Initramfs;
 use crate::newc::Archive;
 use crate::utils;
 
+use anyhow::Result;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use goblin::elf::Elf;
@@ -37,7 +38,7 @@ pub(crate) struct Builder {
 }
 
 impl Builder {
-    pub(crate) fn new() -> io::Result<Self> {
+    pub(crate) fn new() -> Result<Self> {
         let builder = Builder {
             map: HashMap::new(),
         };
@@ -45,10 +46,7 @@ impl Builder {
         Ok(builder)
     }
 
-    pub(crate) fn from_config(
-        config: Initramfs,
-        kernel_version: Option<String>,
-    ) -> io::Result<Self> {
+    pub(crate) fn from_config(config: Initramfs, kernel_version: Option<String>) -> Result<Self> {
         let mut builder = Builder::new()?;
         builder.add_init(config.init)?;
 
@@ -72,7 +70,7 @@ impl Builder {
 
         if let Some(modules) = config.module {
             for module in modules {
-                let path = builder.modinfo(module.name, &kernel_version)?;
+                let path = modinfo(module.name, &kernel_version)?;
                 builder.add_module(path)?;
             }
         }
@@ -80,7 +78,7 @@ impl Builder {
         Ok(builder)
     }
 
-    pub(crate) fn add_init(&mut self, path: PathBuf) -> io::Result<()> {
+    pub(crate) fn add_init(&mut self, path: PathBuf) -> Result<()> {
         info!("Adding init script: {}", path.to_string_lossy());
 
         self.map.insert(
@@ -94,7 +92,7 @@ impl Builder {
         Ok(())
     }
 
-    pub(crate) fn add_module(&mut self, path: PathBuf) -> io::Result<()> {
+    pub(crate) fn add_module(&mut self, path: PathBuf) -> Result<()> {
         if !self.map.contains_key(&path) {
             info!("Adding kernel module: {}", path.to_string_lossy());
 
@@ -110,7 +108,7 @@ impl Builder {
         Ok(())
     }
 
-    pub(crate) fn add_binary(&mut self, path: PathBuf) -> io::Result<()> {
+    pub(crate) fn add_binary(&mut self, path: PathBuf) -> Result<()> {
         if !self.map.contains_key(&path) {
             info!("Adding binary: {}", path.to_string_lossy());
             return self.add_elf(path, "/usr/bin");
@@ -119,7 +117,7 @@ impl Builder {
         Ok(())
     }
 
-    pub(crate) fn add_library(&mut self, path: PathBuf) -> io::Result<()> {
+    pub(crate) fn add_library(&mut self, path: PathBuf) -> Result<()> {
         if !self.map.contains_key(&path) {
             info!("Adding library: {}", path.to_string_lossy());
             return self.add_elf(path, "/usr/lib");
@@ -128,7 +126,7 @@ impl Builder {
         Ok(())
     }
 
-    pub(crate) fn add_tree(&mut self, source: PathBuf, dest: PathBuf) -> io::Result<()> {
+    pub(crate) fn add_tree(&mut self, source: PathBuf, dest: PathBuf) -> Result<()> {
         info!("Copying filesystem tree from: {}", source.to_string_lossy());
         self.map.insert(
             source.clone(),
@@ -141,7 +139,7 @@ impl Builder {
         Ok(())
     }
 
-    pub(crate) fn build<P>(self, output: P, ucode: Option<P>) -> io::Result<()>
+    pub(crate) fn build<P>(self, output: P, ucode: Option<P>) -> Result<()>
     where
         P: AsRef<Path>,
     {
@@ -171,7 +169,7 @@ impl Builder {
             utils::copy_and_chown(&source, dest)?;
         }
 
-        self.depmod(tmp_path)?;
+        depmod(tmp_path)?;
         let mut output_file = utils::maybe_stdout(&output)?;
 
         if let Some(ucode) = ucode {
@@ -190,34 +188,31 @@ impl Builder {
 }
 
 impl Builder {
-    fn add_elf<P>(&mut self, path: PathBuf, dest: P) -> io::Result<()>
+    fn add_elf<P>(&mut self, path: PathBuf, dest: P) -> Result<()>
     where
         P: AsRef<Path>,
     {
         if !path.exists() {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("binary not found: {}", path.to_string_lossy()),
-            ));
+            error!("Failed to find binary: {}", path.to_string_lossy());
+            anyhow::bail!("binary not found: {}", path.to_string_lossy());
         }
 
         let bin = fs::read(path.clone())?;
-        let elf = Elf::parse(&bin).map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "only ELF binaries are supported",
-            )
-        })?;
+        let elf = match Elf::parse(&bin) {
+            Ok(elf) => elf,
+            Err(_) => {
+                error!("Failed to parse binary: {}", path.to_string_lossy());
+                anyhow::bail!("only ELF binaries are supported");
+            }
+        };
 
         self.add_dependencies(elf)?;
 
         let filename = match path.file_name() {
             Some(filename) => filename,
             None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("binary path invalid: {}", path.to_string_lossy()),
-                ))
+                error!("Failed to get filname for binary: {}", path.to_string_lossy());
+                anyhow::bail!("filename not found in path: {}", path.to_string_lossy());
             }
         };
 
@@ -233,7 +228,7 @@ impl Builder {
         Ok(())
     }
 
-    fn add_dependencies(&mut self, elf: Elf) -> io::Result<()> {
+    fn add_dependencies(&mut self, elf: Elf) -> Result<()> {
         let libraries = elf.libraries;
 
         if !libraries.is_empty() {
@@ -243,18 +238,19 @@ impl Builder {
 
                 let (handle, ret) = unsafe {
                     let handle = libc::dlopen(name.as_ptr(), libc::RTLD_LAZY);
+
                     if handle.is_null() {
                         let error = CStr::from_ptr(libc::dlerror())
                             .to_str()
                             .expect("error should be valid utf8");
 
-                        error!("{}", error);
-                        return Err(io::Error::new(io::ErrorKind::Other, error));
+                        error!("Failed to open handle to dynamic dependency for {}", lib);
+                        anyhow::bail!("dlopen failed: {}", error);
                     }
 
-                    let ret = dlinfo(
+                    let ret = libc::dlinfo(
                         handle,
-                        RTLD_DI_LINKMAP,
+                        libc::RTLD_DI_LINKMAP,
                         map.as_mut_ptr() as *mut libc::c_void,
                     );
 
@@ -263,7 +259,7 @@ impl Builder {
 
                 if ret < 0 {
                     error!("Failed to get path to dynamic dependency for {}", lib);
-                    return Err(io::Error::new(io::ErrorKind::Other, "dlinfo failed"));
+                    anyhow::bail!("dlinfo failed");
                 }
 
                 let name = unsafe {
@@ -276,7 +272,7 @@ impl Builder {
                 let ret = unsafe { libc::dlclose(handle) };
                 if ret < 0 {
                     error!("Failed to close handle to dynamic dependency for {}", lib);
-                    return Err(io::Error::new(io::ErrorKind::Other, "dlclose failed"));
+                    anyhow::bail!("dlclose failed");
                 }
 
                 self.add_library(path)?;
@@ -285,48 +281,41 @@ impl Builder {
 
         Ok(())
     }
-
-    fn modinfo<T>(&self, name: T, kernel_version: &Option<String>) -> io::Result<PathBuf>
-    where
-        T: AsRef<str>,
-    {
-        let mut command = Command::new("modinfo");
-
-        if let Some(version) = kernel_version {
-            command.args(&["-k", &version]);
-        }
-
-        command.args(&["-n", name.as_ref()]).output().map(|output| {
-            let path = std::str::from_utf8(&output.stdout)
-                .expect("modinfo output should be valid utf8")
-                .trim_end();
-
-            path.into()
-        })
-    }
-
-    fn depmod<P>(&self, path: P) -> io::Result<()>
-    where
-        P: AsRef<Path>,
-    {
-        Command::new("depmod")
-            .args(&[
-                "-b",
-                path.as_ref()
-                    .to_str()
-                    .expect("tmpdir path should be valid utf8"),
-            ])
-            .output()?;
-
-        Ok(())
-    }
 }
 
-// FIXME: remove this once a new version of libc is released
+fn modinfo<T>(name: T, kernel_version: &Option<String>) -> Result<PathBuf>
+where
+    T: AsRef<str>,
+{
+    let mut command = Command::new("modinfo");
 
-use libc::{c_int, c_void};
+    if let Some(version) = kernel_version {
+        command.args(&["-k", &version]);
+    }
 
-const RTLD_DI_LINKMAP: c_int = 2;
+    let output = command.args(&["-n", name.as_ref()]).output()?;
+    let path = std::str::from_utf8(&output.stdout)
+        .expect("modinfo output should be valid utf8")
+        .trim_end();
+
+    Ok(path.into())
+}
+
+fn depmod<P>(path: P) -> Result<()>
+where
+    P: AsRef<Path>,
+{
+    Command::new("depmod")
+        .args(&[
+            "-b",
+            path.as_ref()
+                .to_str()
+                .expect("tmpdir path should be valid utf8"),
+        ])
+        .output()?;
+
+    Ok(())
+}
 
 #[repr(C)]
 struct link_map {
@@ -335,9 +324,4 @@ struct link_map {
     l_ld: *mut libc::c_void,
     l_next: *mut libc::c_void,
     l_prev: *mut libc::c_void,
-}
-
-#[link(name = "dl")]
-extern "C" {
-    pub fn dlinfo(handle: *mut c_void, request: c_int, info: *mut c_void) -> c_int;
 }

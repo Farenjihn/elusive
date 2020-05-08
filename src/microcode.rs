@@ -2,6 +2,7 @@ use crate::config::Microcode;
 use crate::newc::Archive;
 use crate::utils;
 
+use anyhow::Result;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use log::{info, warn};
@@ -21,14 +22,14 @@ pub(crate) struct Builder {
 }
 
 impl Builder {
-    pub(crate) fn new() -> io::Result<Self> {
+    pub(crate) fn new() -> Result<Self> {
         Ok(Builder {
             amd: None,
             intel: None,
         })
     }
 
-    pub(crate) fn from_config(config: Microcode) -> io::Result<Self> {
+    pub(crate) fn from_config(config: Microcode) -> Result<Self> {
         let mut builder = Builder::new()?;
 
         builder.amd = config.amd;
@@ -37,7 +38,7 @@ impl Builder {
         Ok(builder)
     }
 
-    pub(crate) fn build<P>(self, output: P) -> io::Result<()>
+    pub(crate) fn build<P>(self, output: P) -> Result<()>
     where
         P: AsRef<Path>,
     {
@@ -72,37 +73,37 @@ impl Builder {
 }
 
 impl Builder {
-    fn add_amd<P>(&self, dir: &Path, output: P) -> io::Result<()>
+    fn add_amd<P>(&self, dir: &Path, output: P) -> Result<()>
     where
         P: AsRef<Path>,
     {
         let output = output.as_ref().join(AMD_UCODE_NAME);
-        self.bundle_ucode(dir, output)
+        bundle_ucode(dir, output)
     }
 
-    fn add_intel<P>(&self, dir: &Path, output: P) -> io::Result<()>
+    fn add_intel<P>(&self, dir: &Path, output: P) -> Result<()>
     where
         P: AsRef<Path>,
     {
         let output = output.as_ref().join(INTEL_UCODE_NAME);
-        self.bundle_ucode(dir, output)
+        bundle_ucode(dir, output)
     }
+}
 
-    fn bundle_ucode<P>(&self, dir: &Path, output: P) -> io::Result<()>
-    where
-        P: AsRef<Path>,
-    {
-        let mut output_file = File::create(output.as_ref())?;
+fn bundle_ucode<P>(dir: &Path, output: P) -> Result<()>
+where
+    P: AsRef<Path>,
+{
+    let mut output_file = File::create(output.as_ref())?;
 
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
 
-            if entry.file_type()?.is_file() {
-                let mut file = File::open(entry.path())?;
-                io::copy(&mut file, &mut output_file)?;
-            }
+        if entry.file_type()?.is_file() {
+            let mut file = File::open(entry.path())?;
+            io::copy(&mut file, &mut output_file)?;
         }
-
-        Ok(())
     }
+
+    Ok(())
 }
