@@ -198,20 +198,23 @@ impl Builder {
         }
 
         let bin = fs::read(path.clone())?;
-        let elf = match Elf::parse(&bin) {
-            Ok(elf) => elf,
+        let bin = match Elf::parse(&bin) {
+            Ok(bin) => bin,
             Err(_) => {
                 error!("Failed to parse binary: {}", path.to_string_lossy());
                 anyhow::bail!("only ELF binaries are supported");
             }
         };
 
-        self.add_dependencies(elf)?;
+        self.add_dependencies(bin)?;
 
         let filename = match path.file_name() {
             Some(filename) => filename,
             None => {
-                error!("Failed to get filname for binary: {}", path.to_string_lossy());
+                error!(
+                    "Failed to get filname for binary: {}",
+                    path.to_string_lossy()
+                );
                 anyhow::bail!("filename not found in path: {}", path.to_string_lossy());
             }
         };
@@ -228,8 +231,8 @@ impl Builder {
         Ok(())
     }
 
-    fn add_dependencies(&mut self, elf: Elf) -> Result<()> {
-        let libraries = elf.libraries;
+    fn add_dependencies(&mut self, bin: Elf) -> Result<()> {
+        let libraries = bin.libraries;
 
         if !libraries.is_empty() {
             for lib in libraries {
