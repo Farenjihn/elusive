@@ -212,7 +212,7 @@ impl Builder {
             Some(filename) => filename,
             None => {
                 error!(
-                    "Failed to get filname for binary: {}",
+                    "Failed to get filename for binary: {}",
                     path.to_string_lossy()
                 );
                 anyhow::bail!("filename not found in path: {}", path.to_string_lossy());
