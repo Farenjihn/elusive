@@ -57,11 +57,11 @@ impl Builder {
         }
 
         if let Some(amd) = &self.amd {
-            self.add_amd(amd, &ucode_tree)?;
+            add_amd(amd, &ucode_tree)?;
         }
 
         if let Some(intel) = &self.intel {
-            self.add_intel(intel, &ucode_tree)?;
+            add_intel(intel, &ucode_tree)?;
         }
 
         let output_file = utils::maybe_stdout(&output)?;
@@ -72,22 +72,20 @@ impl Builder {
     }
 }
 
-impl Builder {
-    fn add_amd<P>(&self, dir: &Path, output: P) -> Result<()>
-    where
-        P: AsRef<Path>,
-    {
-        let output = output.as_ref().join(AMD_UCODE_NAME);
-        bundle_ucode(dir, output)
-    }
+fn add_amd<P>(dir: &Path, output: P) -> Result<()>
+where
+    P: AsRef<Path>,
+{
+    let output = output.as_ref().join(AMD_UCODE_NAME);
+    bundle_ucode(dir, output)
+}
 
-    fn add_intel<P>(&self, dir: &Path, output: P) -> Result<()>
-    where
-        P: AsRef<Path>,
-    {
-        let output = output.as_ref().join(INTEL_UCODE_NAME);
-        bundle_ucode(dir, output)
-    }
+fn add_intel<P>(dir: &Path, output: P) -> Result<()>
+where
+    P: AsRef<Path>,
+{
+    let output = output.as_ref().join(INTEL_UCODE_NAME);
+    bundle_ucode(dir, output)
 }
 
 fn bundle_ucode<P>(dir: &Path, output: P) -> Result<()>
