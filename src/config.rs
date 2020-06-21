@@ -87,3 +87,15 @@ pub(crate) struct Tree {
     /// The destination to copy the tree to
     pub(crate) dest: PathBuf,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_config() {
+        let data = fs::read("example.toml").unwrap();
+        toml::from_slice::<Config>(&data).unwrap();
+    }
+}
