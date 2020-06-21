@@ -1,3 +1,9 @@
+//! Microcode bundle generation
+//!
+//! This module provides an API to help generating a microcode bundle
+//! for early loading by the Linux kernel according to its initramfs
+//! specification.
+
 use crate::config::Microcode;
 use crate::newc::Archive;
 use crate::utils;
@@ -11,17 +17,24 @@ use std::path::{Path, PathBuf};
 use std::{fs, io};
 use tempfile::TempDir;
 
+/// Path where the blobs will be searched by the Linux kernel
 const UCODE_TREE: &str = "kernel/x86/microcode";
 
+/// Name of the microcode blob for AMD
 const AMD_UCODE_NAME: &str = "AuthenticAMD.bin";
+/// Name of the microcode blob for Intel
 const INTEL_UCODE_NAME: &str = "GenuineIntel.bin";
 
+/// Builder pattern for microcode bundle generation
 pub(crate) struct Builder {
+    /// Optional path to AMD specific blobs
     amd: Option<PathBuf>,
+    /// Optional path to Intel specific blobs
     intel: Option<PathBuf>,
 }
 
 impl Builder {
+    /// Create a new builder
     pub(crate) fn new() -> Result<Self> {
         Ok(Builder {
             amd: None,
@@ -29,6 +42,7 @@ impl Builder {
         })
     }
 
+    /// Create a new builder from a configuration
     pub(crate) fn from_config(config: Microcode) -> Result<Self> {
         let mut builder = Builder::new()?;
 
@@ -38,6 +52,8 @@ impl Builder {
         Ok(builder)
     }
 
+    /// Build the microcode bundle by writing all entries to a temporary directory
+    /// and the walking it to create the compressed cpio archive
     pub(crate) fn build<P>(self, output: P) -> Result<()>
     where
         P: AsRef<Path>,
@@ -72,6 +88,7 @@ impl Builder {
     }
 }
 
+/// Add the AMD specific blob to the bundle
 fn add_amd<P>(dir: &Path, output: P) -> Result<()>
 where
     P: AsRef<Path>,
@@ -80,6 +97,7 @@ where
     bundle_ucode(dir, output)
 }
 
+/// Add the Intel specific blob to the bundle
 fn add_intel<P>(dir: &Path, output: P) -> Result<()>
 where
     P: AsRef<Path>,
@@ -88,6 +106,7 @@ where
     bundle_ucode(dir, output)
 }
 
+/// Bundle multiple vendor specific microcode blobs into a single blob
 fn bundle_ucode<P>(dir: &Path, output: P) -> Result<()>
 where
     P: AsRef<Path>,
