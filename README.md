@@ -19,7 +19,7 @@ A sample configuration file is available in the repository. Using the CLI should
 elusive microcode -o - | elusive initramfs --ucode - -o initramfs.gz
 ```
 
-By default, configuration is read from `/etc/elusive/config.toml`, but the path can be selected through a command-line argument at runtime.
+By default, configuration is read from `/etc/elusive.toml`, but the path can be selected through a command-line argument at runtime.
 
 ## Why
 
