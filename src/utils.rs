@@ -1,3 +1,5 @@
+//! Various utilities
+
 use anyhow::Result;
 use std::ffi::{CString, OsStr};
 use std::fs::File;
@@ -6,6 +8,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::{fs, io};
 
+/// Allow reading from either a file or standard input
 pub(crate) fn maybe_stdin<P>(path: P) -> Result<Box<dyn Read>>
 where
     P: AsRef<Path>,
@@ -17,6 +20,7 @@ where
     }
 }
 
+/// Allow writing to either a file or standard output
 pub(crate) fn maybe_stdout<P>(path: P) -> Result<Box<dyn Write>>
 where
     P: AsRef<Path>,
@@ -28,6 +32,7 @@ where
     }
 }
 
+/// Copy files and then `chown` them so they belong to `root:root`
 pub(crate) fn copy_and_chown<S, D>(source: S, dest: D) -> Result<()>
 where
     S: AsRef<Path>,

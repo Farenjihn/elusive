@@ -1,3 +1,8 @@
+//! Initramfs generation
+//!
+//! This module provides an API to help generating a compressed
+//! cpio archive to use as an initramfs.
+
 use crate::config::Initramfs;
 use crate::newc::Archive;
 use crate::utils;
@@ -16,10 +21,12 @@ use std::process::Command;
 use std::{fs, io, os::unix};
 use tempfile::TempDir;
 
+/// Default directories to include in the initramfs
 const ROOT_DIRS: [&str; 10] = [
     "dev", "etc", "mnt", "proc", "run", "sys", "tmp", "usr/bin", "usr/lib", "var",
 ];
 
+/// Default symlinks to create within the initramfs
 const ROOT_SYMLINKS: [(&str, &str); 4] = [
     ("bin", "usr/bin"),
     ("lib", "usr/lib"),
@@ -27,17 +34,23 @@ const ROOT_SYMLINKS: [(&str, &str); 4] = [
     ("sbin", "usr/bin"),
 ];
 
+/// An entry to copy in the initramfs
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub(crate) struct Entry {
+    /// The source path of the entry
     from: PathBuf,
+    /// The destination path of the entry
     to: PathBuf,
 }
 
+/// Builder pattern for initramfs generation
 pub(crate) struct Builder {
+    /// Map of entries to avoid duplicates
     map: HashMap<PathBuf, Entry>,
 }
 
 impl Builder {
+    /// Create a new builder
     pub(crate) fn new() -> Result<Self> {
         let builder = Builder {
             map: HashMap::new(),
@@ -46,6 +59,7 @@ impl Builder {
         Ok(builder)
     }
 
+    /// Create a new builder from a configuration and optional kernel version
     pub(crate) fn from_config(config: Initramfs, kernel_version: Option<String>) -> Result<Self> {
         let mut builder = Builder::new()?;
         builder.add_init(config.init)?;
@@ -78,6 +92,7 @@ impl Builder {
         Ok(builder)
     }
 
+    /// Add the init (script or binary) from the provided path to the initramfs
     pub(crate) fn add_init(&mut self, path: PathBuf) -> Result<()> {
         info!("Adding init script: {}", path.to_string_lossy());
 
@@ -92,6 +107,7 @@ impl Builder {
         Ok(())
     }
 
+    /// Add the kernel module from the provided path to the initramfs
     pub(crate) fn add_module(&mut self, path: PathBuf) -> Result<()> {
         if !self.map.contains_key(&path) {
             info!("Adding kernel module: {}", path.to_string_lossy());
@@ -108,6 +124,7 @@ impl Builder {
         Ok(())
     }
 
+    /// Add the binary from the provided path to the initramfs
     pub(crate) fn add_binary(&mut self, path: PathBuf) -> Result<()> {
         if !self.map.contains_key(&path) {
             info!("Adding binary: {}", path.to_string_lossy());
@@ -117,6 +134,7 @@ impl Builder {
         Ok(())
     }
 
+    /// Add the library from the provided path to the initramfs
     pub(crate) fn add_library(&mut self, path: PathBuf) -> Result<()> {
         if !self.map.contains_key(&path) {
             info!("Adding library: {}", path.to_string_lossy());
@@ -126,6 +144,8 @@ impl Builder {
         Ok(())
     }
 
+    /// Add the filesystem tree from the provided source to the provided destination in the
+    /// initramfs
     pub(crate) fn add_tree(&mut self, source: PathBuf, dest: PathBuf) -> Result<()> {
         info!("Copying filesystem tree from: {}", source.to_string_lossy());
         self.map.insert(
@@ -139,6 +159,8 @@ impl Builder {
         Ok(())
     }
 
+    /// Build the initramfs by writing all entries to a temporary directory
+    /// and then walking it to create the compressed cpio archive
     pub(crate) fn build<P>(self, output: P, ucode: Option<P>) -> Result<()>
     where
         P: AsRef<Path>,
@@ -188,6 +210,8 @@ impl Builder {
 }
 
 impl Builder {
+    /// Adds an elf binary to the initramfs, also adding its dynamic dependencies
+    /// if any
     fn add_elf<P>(&mut self, path: PathBuf, dest: P) -> Result<()>
     where
         P: AsRef<Path>,
@@ -231,6 +255,7 @@ impl Builder {
         Ok(())
     }
 
+    /// Adds the dependencies of an elf binary to the initramfs
     fn add_dependencies(&mut self, bin: Elf) -> Result<()> {
         let libraries = bin.libraries;
 
@@ -286,6 +311,7 @@ impl Builder {
     }
 }
 
+/// Run `modinfo` to get path to module from its name
 fn modinfo<T>(name: T, kernel_version: &Option<String>) -> Result<PathBuf>
 where
     T: AsRef<str>,
@@ -304,6 +330,7 @@ where
     Ok(path.into())
 }
 
+/// Run `depmod` to create `modules.dep` and map files
 fn depmod<P>(path: P) -> Result<()>
 where
     P: AsRef<Path>,
@@ -320,6 +347,7 @@ where
     Ok(())
 }
 
+/// C struct used in `dlopen` with `RTLD_DI_LINKMAP`
 #[repr(C)]
 struct link_map {
     l_addr: u64,

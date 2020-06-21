@@ -12,8 +12,10 @@ use env_logger::Env;
 use log::warn;
 use std::fs;
 
+/// Default path for the config file
 const CONFIG_PATH: &str = "/etc/elusive.toml";
 
+/// Entrypoint of the program
 fn main() -> Result<()> {
     let env = Env::default().filter_or("RUST_LOG", "info");
     env_logger::init_from_env(env);
