@@ -73,7 +73,7 @@ fn walk_linkmap(lib: &str, resolved: &mut HashSet<PathBuf>) -> Result<()> {
         let mut linkmap = linkmap.assume_init();
 
         // Walk back to the beginning of the link map
-        while (*linkmap).l_prev != std::ptr::null_mut() {
+        while !(*linkmap).l_prev.is_null() {
             linkmap = (*linkmap).l_prev as *mut link_map;
         }
 
@@ -82,7 +82,7 @@ fn walk_linkmap(lib: &str, resolved: &mut HashSet<PathBuf>) -> Result<()> {
         linkmap = (*linkmap).l_next as *mut link_map;
 
         // Walk through the link map and add entries
-        while (*linkmap).l_next != std::ptr::null_mut() {
+        while !(*linkmap).l_next.is_null() {
             linkmap = (*linkmap).l_next as *mut link_map;
             names.push(CStr::from_ptr((*linkmap).l_name));
         }
