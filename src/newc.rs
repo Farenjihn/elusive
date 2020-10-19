@@ -28,43 +28,34 @@ impl Archive {
     /// to a compressed cpio archive.
     pub(crate) fn from_root<P, O>(root_dir: P, out: &mut O) -> Result<()>
     where
-        P: AsRef<Path> + Clone,
+        P: AsRef<Path>,
         O: Write,
     {
-        let walk = WalkDir::new(root_dir.as_ref())
-            .into_iter()
-            .skip(1)
-            .enumerate();
+        let root_dir = root_dir.as_ref();
+        let walk = WalkDir::new(&root_dir).into_iter().skip(1).enumerate();
 
         let mut buf = Vec::new();
         for (index, dir_entry) in walk {
             let dir_entry = dir_entry?;
-            let name = dir_entry
-                .path()
-                .strip_prefix(root_dir.clone().as_ref())?
-                .to_string_lossy();
+            let name = dir_entry.path().strip_prefix(&root_dir)?.to_string_lossy();
 
             let metadata = dir_entry.metadata()?;
             let ty = metadata.file_type();
 
-            let builder = match ty {
-                _ if ty.is_dir() => EntryBuilder::directory(&name),
-                _ if ty.is_file() => {
-                    let file = File::open(dir_entry.path())?;
-                    EntryBuilder::file(&name, file)
-                }
-                _ if ty.is_symlink() => {
-                    let path = fs::read_link(dir_entry.path())?;
-                    EntryBuilder::symlink(&name, path)
-                }
-                _ => unreachable!(),
+            let builder = if ty.is_dir() {
+                EntryBuilder::directory(&name)
+            } else if ty.is_file() {
+                let file = File::open(dir_entry.path())?;
+                EntryBuilder::file(&name, file)
+            } else if ty.is_symlink() {
+                let path = fs::read_link(dir_entry.path())?;
+                EntryBuilder::symlink(&name, path)
+            } else {
+                unreachable!();
             };
 
             let entry = builder.with_metadata(metadata).ino(index as u64).build();
             entry.write_to_buf(&mut buf)?;
-
-            out.write_all(&buf)?;
-            buf.clear();
         }
 
         let trailer = EntryBuilder::trailer().ino(0).build();
@@ -97,10 +88,6 @@ pub(crate) struct EntryHeader {
     ino: u64,
     /// Mode of the entry
     mode: u32,
-    /// Owner uid of the entry
-    uid: u32,
-    /// Owner gid of the entry
-    gid: u32,
     /// Number of links to the entry
     nlink: u64,
     /// Modification time of the entry
@@ -142,12 +129,13 @@ impl Entry {
         let filename = CString::new(self.header.name.clone())?.into_bytes_with_nul();
 
         buf.reserve(6 + (13 * 8) + filename.len() + file_size);
-
         buf.extend(MAGIC);
         write!(buf, "{:08x}", self.header.ino)?;
         write!(buf, "{:08x}", self.header.mode)?;
-        write!(buf, "{:08x}", self.header.uid)?;
-        write!(buf, "{:08x}", self.header.gid)?;
+        // uid is always 0 (root)
+        write!(buf, "{:08x}", 0)?;
+        // gid is always 0 (root)
+        write!(buf, "{:08x}", 0)?;
         write!(buf, "{:08x}", self.header.nlink)?;
         write!(buf, "{:08x}", self.header.mtime)?;
         write!(buf, "{:08x}", file_size)?;
@@ -256,10 +244,7 @@ impl EntryBuilder {
 
     /// Add the provided metadata to the entry
     pub(crate) fn with_metadata(self, metadata: Metadata) -> Self {
-        self.mode(metadata.mode())
-            .uid(metadata.uid())
-            .gid(metadata.gid())
-            .mtime(metadata.mtime() as u64)
+        self.mode(metadata.mode()).mtime(metadata.mtime() as u64)
     }
 
     /// Set the inode for the entry
@@ -271,18 +256,6 @@ impl EntryBuilder {
     /// Set the mode for the entry
     pub(crate) fn mode(mut self, mode: u32) -> Self {
         self.entry.header.mode = mode;
-        self
-    }
-
-    /// Set the owner uid for the entry
-    pub(crate) fn uid(mut self, uid: u32) -> Self {
-        self.entry.header.uid = uid;
-        self
-    }
-
-    /// Set the owner gid for the entry
-    pub(crate) fn gid(mut self, gid: u32) -> Self {
-        self.entry.header.gid = gid;
         self
     }
 

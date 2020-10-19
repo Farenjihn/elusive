@@ -1,4 +1,5 @@
 mod config;
+mod depend;
 mod initramfs;
 mod microcode;
 mod newc;
