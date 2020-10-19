@@ -59,7 +59,7 @@ impl Builder {
         P: AsRef<Path>,
     {
         let output = output.as_ref();
-        info!("Writing microcode cpio to: {}", output.to_string_lossy());
+        info!("Writing microcode cpio to: {}", output.display());
 
         let tmp = TempDir::new()?;
         let tmp_path = tmp.path();

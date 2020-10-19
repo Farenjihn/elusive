@@ -4,18 +4,15 @@
 //! cpio archive to use as an initramfs.
 
 use crate::config::Initramfs;
+use crate::depend::Resolver;
 use crate::newc::Archive;
 use crate::utils;
 
 use anyhow::Result;
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use goblin::elf::Elf;
 use log::{error, info};
 use std::collections::HashMap;
-use std::ffi::{CStr, CString, OsStr};
-use std::mem::MaybeUninit;
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io, os::unix};
@@ -34,19 +31,10 @@ const ROOT_SYMLINKS: [(&str, &str); 4] = [
     ("sbin", "usr/bin"),
 ];
 
-/// An entry to copy in the initramfs
-#[derive(PartialEq, Eq, Hash, Clone)]
-pub(crate) struct Entry {
-    /// The source path of the entry
-    from: PathBuf,
-    /// The destination path of the entry
-    to: PathBuf,
-}
-
 /// Builder pattern for initramfs generation
 pub(crate) struct Builder {
     /// Map of entries to avoid duplicates
-    map: HashMap<PathBuf, Entry>,
+    map: HashMap<PathBuf, PathBuf>,
 }
 
 impl Builder {
@@ -65,14 +53,32 @@ impl Builder {
         builder.add_init(config.init)?;
 
         if let Some(binaries) = config.bin {
-            for binary in binaries {
-                builder.add_binary(binary.path)?;
+            let paths: Vec<PathBuf> = binaries.into_iter().map(|bin| bin.path).collect();
+
+            let resolver = Resolver::new(&paths);
+            let dependencies = resolver.resolve()?;
+
+            for path in paths {
+                builder.add_binary(path)?;
+            }
+
+            for dependency in dependencies {
+                builder.add_library(dependency)?;
             }
         }
 
         if let Some(libraries) = config.lib {
-            for library in libraries {
-                builder.add_library(library.path)?;
+            let paths: Vec<PathBuf> = libraries.into_iter().map(|lib| lib.path).collect();
+
+            let resolver = Resolver::new(&paths);
+            let dependencies = resolver.resolve()?;
+
+            for path in paths {
+                builder.add_library(path)?;
+            }
+
+            for dependency in dependencies {
+                builder.add_library(dependency)?;
             }
         }
 
@@ -94,15 +100,8 @@ impl Builder {
 
     /// Add the init (script or binary) from the provided path to the initramfs
     pub(crate) fn add_init(&mut self, path: PathBuf) -> Result<()> {
-        info!("Adding init script: {}", path.to_string_lossy());
-
-        self.map.insert(
-            path.clone(),
-            Entry {
-                from: path,
-                to: PathBuf::from("/init"),
-            },
-        );
+        info!("Adding init script: {}", path.display());
+        self.map.insert(path, PathBuf::from("/init"));
 
         Ok(())
     }
@@ -110,15 +109,8 @@ impl Builder {
     /// Add the kernel module from the provided path to the initramfs
     pub(crate) fn add_module(&mut self, path: PathBuf) -> Result<()> {
         if !self.map.contains_key(&path) {
-            info!("Adding kernel module: {}", path.to_string_lossy());
-
-            self.map.insert(
-                path.clone(),
-                Entry {
-                    from: path.clone(),
-                    to: path,
-                },
-            );
+            info!("Adding kernel module: {}", path.display());
+            self.map.insert(path.clone(), path);
         }
 
         Ok(())
@@ -127,8 +119,8 @@ impl Builder {
     /// Add the binary from the provided path to the initramfs
     pub(crate) fn add_binary(&mut self, path: PathBuf) -> Result<()> {
         if !self.map.contains_key(&path) {
-            info!("Adding binary: {}", path.to_string_lossy());
-            return self.add_elf(path, "/usr/bin");
+            info!("Adding binary: {}", path.display());
+            return self.add_elf(path, PathBuf::from("/usr/bin"));
         }
 
         Ok(())
@@ -137,8 +129,8 @@ impl Builder {
     /// Add the library from the provided path to the initramfs
     pub(crate) fn add_library(&mut self, path: PathBuf) -> Result<()> {
         if !self.map.contains_key(&path) {
-            info!("Adding library: {}", path.to_string_lossy());
-            return self.add_elf(path, "/usr/lib");
+            info!("Adding library: {}", path.display());
+            return self.add_elf(path, PathBuf::from("/usr/lib"));
         }
 
         Ok(())
@@ -147,14 +139,8 @@ impl Builder {
     /// Add the filesystem tree from the provided source to the provided destination in the
     /// initramfs
     pub(crate) fn add_tree(&mut self, source: PathBuf, dest: PathBuf) -> Result<()> {
-        info!("Copying filesystem tree from: {}", source.to_string_lossy());
-        self.map.insert(
-            source.clone(),
-            Entry {
-                from: source,
-                to: dest,
-            },
-        );
+        info!("Copying filesystem tree from: {}", source.display());
+        self.map.insert(source, dest);
 
         Ok(())
     }
@@ -166,29 +152,22 @@ impl Builder {
         P: AsRef<Path>,
     {
         let output = output.as_ref();
-        info!("Writing initramfs to: {}", output.to_string_lossy());
+        info!("Writing initramfs to: {}", output.display());
 
         let tmp = TempDir::new()?;
         let tmp_path = tmp.path();
 
         for dir in &ROOT_DIRS {
-            fs::create_dir_all(tmp.path().join(dir))?;
+            fs::create_dir_all(tmp_path.join(dir))?;
         }
 
         for link in &ROOT_SYMLINKS {
-            unix::fs::symlink(link.1, tmp.path().join(link.0))?;
+            unix::fs::symlink(link.1, tmp_path.join(link.0))?;
         }
 
-        for entry in self.map.values() {
-            let source = &entry.from;
-            let dest = tmp_path.join(
-                &entry
-                    .to
-                    .strip_prefix("/")
-                    .expect("path should have a leading /"),
-            );
-
-            utils::copy_and_chown(&source, dest)?;
+        for (source, to) in self.map {
+            let dest = tmp_path.join(to.strip_prefix("/").expect("path should have a leading /"));
+            utils::copy_files(&source, dest)?;
         }
 
         depmod(tmp_path)?;
@@ -196,7 +175,7 @@ impl Builder {
 
         if let Some(ucode) = ucode {
             let ucode = ucode.as_ref();
-            info!("Adding microcode bundle from: {}", ucode.to_string_lossy());
+            info!("Adding microcode bundle from: {}", ucode.display());
 
             let mut file = utils::maybe_stdin(&ucode)?;
             io::copy(&mut file, &mut output_file)?;
@@ -211,101 +190,22 @@ impl Builder {
 
 impl Builder {
     /// Adds an elf binary to the initramfs, also adding its dynamic dependencies
-    /// if any
-    fn add_elf<P>(&mut self, path: PathBuf, dest: P) -> Result<()>
-    where
-        P: AsRef<Path>,
-    {
-        if !path.exists() {
-            error!("Failed to find binary: {}", path.to_string_lossy());
-            anyhow::bail!("binary not found: {}", path.to_string_lossy());
+    fn add_elf(&mut self, source: PathBuf, dest: PathBuf) -> Result<()> {
+        if !source.exists() {
+            error!("Failed to find binary: {}", source.display());
+            anyhow::bail!("binary not found: {}", source.display());
         }
 
-        let bin = fs::read(path.clone())?;
-        let bin = match Elf::parse(&bin) {
-            Ok(bin) => bin,
-            Err(_) => {
-                error!("Failed to parse binary: {}", path.to_string_lossy());
-                anyhow::bail!("only ELF binaries are supported");
-            }
-        };
-
-        self.add_dependencies(bin)?;
-
-        let filename = match path.file_name() {
+        let filename = match source.file_name() {
             Some(filename) => filename,
             None => {
-                error!(
-                    "Failed to get filename for binary: {}",
-                    path.to_string_lossy()
-                );
-                anyhow::bail!("filename not found in path: {}", path.to_string_lossy());
+                error!("Failed to get filename for binary: {}", source.display());
+                anyhow::bail!("filename not found in path: {}", source.display());
             }
         };
 
-        let dest = dest.as_ref().join(filename);
-        self.map.insert(
-            path.clone(),
-            Entry {
-                from: path,
-                to: dest,
-            },
-        );
-
-        Ok(())
-    }
-
-    /// Adds the dependencies of an elf binary to the initramfs
-    fn add_dependencies(&mut self, bin: Elf) -> Result<()> {
-        let libraries = bin.libraries;
-
-        if !libraries.is_empty() {
-            for lib in libraries {
-                let name = CString::new(lib).unwrap();
-                let mut map: MaybeUninit<*mut link_map> = MaybeUninit::uninit();
-
-                let (handle, ret) = unsafe {
-                    let handle = libc::dlopen(name.as_ptr(), libc::RTLD_LAZY);
-
-                    if handle.is_null() {
-                        let error = CStr::from_ptr(libc::dlerror())
-                            .to_str()
-                            .expect("error should be valid utf8");
-
-                        error!("Failed to open handle to dynamic dependency for {}", lib);
-                        anyhow::bail!("dlopen failed: {}", error);
-                    }
-
-                    let ret = libc::dlinfo(
-                        handle,
-                        libc::RTLD_DI_LINKMAP,
-                        map.as_mut_ptr() as *mut libc::c_void,
-                    );
-
-                    (handle, ret)
-                };
-
-                if ret < 0 {
-                    error!("Failed to get path to dynamic dependency for {}", lib);
-                    anyhow::bail!("dlinfo failed");
-                }
-
-                let name = unsafe {
-                    let map = map.assume_init();
-                    CStr::from_ptr((*map).l_name)
-                };
-
-                let path = PathBuf::from(OsStr::from_bytes(name.to_bytes()));
-
-                let ret = unsafe { libc::dlclose(handle) };
-                if ret < 0 {
-                    error!("Failed to close handle to dynamic dependency for {}", lib);
-                    anyhow::bail!("dlclose failed");
-                }
-
-                self.add_library(path)?;
-            }
-        }
+        let dest = dest.join(filename);
+        self.map.insert(source, dest);
 
         Ok(())
     }
@@ -331,28 +231,13 @@ where
 }
 
 /// Run `depmod` to create `modules.dep` and map files
-fn depmod<P>(path: P) -> Result<()>
-where
-    P: AsRef<Path>,
-{
+fn depmod(path: &Path) -> Result<()> {
     Command::new("depmod")
         .args(&[
             "-b",
-            path.as_ref()
-                .to_str()
-                .expect("tmpdir path should be valid utf8"),
+            path.to_str().expect("tmpdir path should be valid utf8"),
         ])
         .output()?;
 
     Ok(())
-}
-
-/// C struct used in `dlopen` with `RTLD_DI_LINKMAP`
-#[repr(C)]
-struct link_map {
-    l_addr: u64,
-    l_name: *mut libc::c_char,
-    l_ld: *mut libc::c_void,
-    l_next: *mut libc::c_void,
-    l_prev: *mut libc::c_void,
 }
