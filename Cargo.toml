@@ -5,15 +5,15 @@ authors = ["Valentin Finini <valentin.finini@cysec.systems>"]
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.31"
-clap = "2.33.1"
-env_logger = "0.7.1"
-flate2 = "1.0.14"
-fs_extra = "1.1.0"
-libc = "0.2.71"
-log = "0.4.8"
+anyhow = "1.0.33"
+clap = "2.33.3"
+env_logger = "0.8.1"
+flate2 = "1.0.18"
+fs_extra = "1.2.0"
+libc = "0.2.79"
+log = "0.4.11"
 tempfile = "3.1.0"
-toml = "0.5.6"
+toml = "0.5.7"
 walkdir = "2.3.1"
 
 [dependencies.goblin]
@@ -22,5 +22,5 @@ default_features = false
 features = ["std", "elf32", "elf64", "endian_fd"]
 
 [dependencies.serde]
-version = "1.0.113"
+version = "1.0.117"
 features = ["derive"]
