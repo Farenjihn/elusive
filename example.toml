@@ -1,5 +1,5 @@
 [initramfs]
-init = "init"
+init = "/sbin/init"
 
 [[initramfs.bin]]
 path = "/bin/busybox"
