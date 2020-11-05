@@ -82,7 +82,8 @@ impl Builder {
 
         let output_file = utils::maybe_stdout(&output)?;
         let mut encoder = GzEncoder::new(output_file, Compression::default());
-        Archive::from_root(tmp_path, &mut encoder)?;
+        let archive = Archive::from_root(tmp_path)?;
+        archive.write(&mut encoder)?;
 
         Ok(())
     }
