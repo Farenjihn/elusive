@@ -8,7 +8,7 @@ use crate::depend::Resolver;
 use crate::newc::Archive;
 use crate::utils;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use log::{error, info};
@@ -195,14 +195,14 @@ impl Builder {
     fn add_elf(&mut self, source: PathBuf, dest: PathBuf) -> Result<()> {
         if !source.exists() {
             error!("Failed to find binary: {}", source.display());
-            anyhow::bail!("binary not found: {}", source.display());
+            bail!("binary not found: {}", source.display());
         }
 
         let filename = match source.file_name() {
             Some(filename) => filename,
             None => {
                 error!("Failed to get filename for binary: {}", source.display());
-                anyhow::bail!("filename not found in path: {}", source.display());
+                bail!("filename not found in path: {}", source.display());
             }
         };
 
