@@ -279,3 +279,23 @@ pub fn pad_buf(buf: &mut Vec<u8>) {
         buf.resize(buf.len() + (4 - rem), 0);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_builder() -> Result<()> {
+        let temp = NamedTempFile::new()?;
+        let temp = temp.into_file();
+        let meta = temp.metadata()?;
+
+        let entry = EntryBuilder::file("testfile", temp).ino(0).with_metadata(meta).build();
+
+        let mut buf = Vec::new();
+        entry.write_to_buf(&mut buf)?;
+
+        Ok(())
+    }
+}
