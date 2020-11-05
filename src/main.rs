@@ -103,7 +103,7 @@ fn main() -> Result<()> {
             let builder = initramfs::Builder::from_config(config.initramfs, kver)?;
             builder.build(encoder, output, ucode)?;
         }
-        ("micr", Some(microcode)) => {
+        ("microcode", Some(microcode)) => {
             let output = microcode.value_of("output").unwrap();
 
             if let Some(microcode) = config.microcode {
