@@ -4,7 +4,7 @@
 //! that can be used with the Linux kernel to
 //! load an initramfs.
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::ffi::CString;
 use std::fs;
 use std::fs::{File, Metadata};
@@ -52,7 +52,7 @@ impl Archive {
                 let path = fs::read_link(dir_entry.path())?;
                 EntryBuilder::symlink(&name, path)
             } else {
-                unreachable!();
+                bail!("unknown file type: {:?}", ty);
             };
 
             let entry = builder.with_metadata(metadata).ino(index as u64).build();
