@@ -172,7 +172,7 @@ impl Entry {
         write!(buf, "{:08x}", self.header.rdev_major)?;
         write!(buf, "{:08x}", self.header.rdev_minor)?;
         write!(buf, "{:08x}", filename.len())?;
-        write!(buf, "{:08x}", 0)?;
+        write!(buf, "{:08x}", 0)?; // CRC, null bytes with our MAGIC
         buf.write(&filename)?;
         pad_buf(buf);
 
