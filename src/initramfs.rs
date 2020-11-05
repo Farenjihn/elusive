@@ -5,12 +5,10 @@
 
 use crate::config::Initramfs;
 use crate::depend::Resolver;
-use crate::newc::Archive;
+use crate::newc::{Archive, Encoder};
 use crate::utils;
 
 use anyhow::{bail, Result};
-use flate2::write::GzEncoder;
-use flate2::Compression;
 use log::{error, info};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -148,7 +146,7 @@ impl Builder {
 
     /// Build the initramfs by writing all entries to a temporary directory
     /// and then walking it to create the compressed cpio archive
-    pub(crate) fn build<P>(self, output: P, ucode: Option<P>) -> Result<()>
+    pub(crate) fn build<P>(self, encoder: Encoder, output: P, ucode: Option<P>) -> Result<()>
     where
         P: AsRef<Path>,
     {
@@ -182,9 +180,8 @@ impl Builder {
             io::copy(&mut file, &mut output_file)?;
         }
 
-        let mut encoder = GzEncoder::new(output_file, Compression::default());
         let archive = Archive::from_root(tmp_path)?;
-        archive.write(&mut encoder)?;
+        archive.write(encoder, output_file)?;
 
         Ok(())
     }

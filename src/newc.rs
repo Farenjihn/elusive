@@ -5,6 +5,8 @@
 //! load an initramfs.
 
 use anyhow::{bail, Result};
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use std::ffi::{CString, OsStr, OsString};
 use std::fs;
 use std::fs::{File, Metadata};
@@ -13,11 +15,19 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+use zstd::stream::write::Encoder as ZstdEncoder;
 
 /// Magic number for newc cpio files
 const MAGIC: &[u8] = b"070701";
 /// Magic bytes for cpio trailer entries
 const TRAILER: &str = "TRAILER!!!";
+
+/// Represents the compression encoder used for the archive
+pub(crate) enum Encoder {
+    None,
+    Gzip,
+    Zstd,
+}
 
 /// Represents a cpio archive
 pub(crate) struct Archive {
@@ -65,7 +75,7 @@ impl Archive {
         Ok(archive)
     }
 
-    pub(crate) fn write<T>(self, writer: &mut T) -> Result<()>
+    pub(crate) fn write<T>(self, encoder: Encoder, mut writer: T) -> Result<()>
     where
         T: Write,
     {
@@ -77,8 +87,19 @@ impl Archive {
         let trailer = EntryBuilder::trailer().ino(0).build();
         trailer.write(&mut buf)?;
 
-        // write all entries + trailer
-        writer.write_all(&buf)?;
+        // write all entries + trailer using the specified encoder
+        match encoder {
+            Encoder::None => writer.write_all(&buf)?,
+            Encoder::Gzip => {
+                let mut gzenc = GzEncoder::new(writer, Compression::default());
+                gzenc.write_all(&buf)?;
+            }
+            Encoder::Zstd => {
+                let mut zstdenc = ZstdEncoder::new(writer, 3)?;
+                zstdenc.write_all(&buf)?;
+                zstdenc.finish()?;
+            }
+        }
         Ok(())
     }
 }
@@ -159,7 +180,7 @@ impl Entry {
 
         // magic + 8 * fields + filename + file
         buf.reserve(6 + (13 * 8) + filename.len() + file_size);
-        buf.write(MAGIC)?;
+        buf.write_all(MAGIC)?;
         write!(buf, "{:08x}", self.header.ino)?;
         write!(buf, "{:08x}", self.header.mode)?;
         write!(buf, "{:08x}", 0)?; // uid is always 0 (root)
@@ -173,7 +194,7 @@ impl Entry {
         write!(buf, "{:08x}", self.header.rdev_minor)?;
         write!(buf, "{:08x}", filename.len())?;
         write!(buf, "{:08x}", 0)?; // CRC, null bytes with our MAGIC
-        buf.write(&filename)?;
+        buf.write_all(&filename)?;
         pad_buf(buf);
 
         match &mut self.ty {
@@ -181,7 +202,7 @@ impl Entry {
                 file.read_to_end(buf)?;
             }
             EntryType::Symlink(path) => {
-                buf.write(path.as_os_str().as_bytes())?;
+                buf.write_all(path.as_os_str().as_bytes())?;
             }
             _ => (),
         }
