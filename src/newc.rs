@@ -5,10 +5,11 @@
 //! load an initramfs.
 
 use anyhow::{bail, Result};
-use std::ffi::CString;
+use std::ffi::{CString, OsStr, OsString};
 use std::fs;
 use std::fs::{File, Metadata};
 use std::io::{Read, Seek, SeekFrom, Write};
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -38,7 +39,8 @@ impl Archive {
         let mut entries = Vec::new();
         for (index, dir_entry) in walk {
             let dir_entry = dir_entry?;
-            let name = dir_entry.path().strip_prefix(&root_dir)?.to_string_lossy();
+
+            let name = dir_entry.path().strip_prefix(&root_dir)?;
 
             let metadata = dir_entry.metadata()?;
             let ty = metadata.file_type();
@@ -97,7 +99,7 @@ pub(crate) enum EntryType {
 #[derive(Default)]
 pub(crate) struct EntryHeader {
     /// Name of the entry (path)
-    name: String,
+    name: OsString,
     /// Inode of the entry
     ino: u64,
     /// Mode of the entry
@@ -120,7 +122,7 @@ impl EntryHeader {
     /// Create a header with the provided name
     pub(crate) fn with_name<T>(name: T) -> Self
     where
-        T: AsRef<str>,
+        T: AsRef<OsStr>,
     {
         EntryHeader {
             name: name.as_ref().to_owned(),
@@ -147,19 +149,17 @@ impl Entry {
 
                 file_size as usize
             }
-            EntryType::Symlink(ref path) => {
-                let path_str = path.to_string_lossy();
-                path_str.len()
-            }
+            EntryType::Symlink(path) => path.as_os_str().len(),
             _ => 0,
         };
 
         // serialize the header for this entry
-        let filename = CString::new(self.header.name)?.into_bytes_with_nul();
+        let filename = CString::new(self.header.name.as_os_str().as_bytes())?;
+        let filename = filename.into_bytes_with_nul();
 
         // magic + 8 * fields + filename + file
         buf.reserve(6 + (13 * 8) + filename.len() + file_size);
-        buf.extend(MAGIC);
+        buf.write(MAGIC)?;
         write!(buf, "{:08x}", self.header.ino)?;
         write!(buf, "{:08x}", self.header.mode)?;
         write!(buf, "{:08x}", 0)?; // uid is always 0 (root)
@@ -173,15 +173,15 @@ impl Entry {
         write!(buf, "{:08x}", self.header.rdev_minor)?;
         write!(buf, "{:08x}", filename.len())?;
         write!(buf, "{:08x}", 0)?;
-        buf.extend(filename);
+        buf.write(&filename)?;
         pad_buf(buf);
 
         match &mut self.ty {
             EntryType::File(file) => {
                 file.read_to_end(buf)?;
             }
-            EntryType::Symlink(ref path) => {
-                buf.extend(path.to_string_lossy().bytes());
+            EntryType::Symlink(path) => {
+                buf.write(path.as_os_str().as_bytes())?;
             }
             _ => (),
         }
@@ -201,7 +201,7 @@ impl EntryBuilder {
     /// Create an entry with the directory type
     pub(crate) fn directory<T>(name: T) -> Self
     where
-        T: AsRef<str>,
+        T: AsRef<OsStr>,
     {
         EntryBuilder {
             entry: Entry {
@@ -214,7 +214,7 @@ impl EntryBuilder {
     /// Create an entry with the file type
     pub(crate) fn file<T>(name: T, file: File) -> Self
     where
-        T: AsRef<str>,
+        T: AsRef<OsStr>,
     {
         EntryBuilder {
             entry: Entry {
@@ -227,7 +227,7 @@ impl EntryBuilder {
     /// Create an entry with the symlink type
     pub(crate) fn symlink<T>(name: T, path: PathBuf) -> Self
     where
-        T: AsRef<str>,
+        T: AsRef<OsStr>,
     {
         EntryBuilder {
             entry: Entry {
