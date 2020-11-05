@@ -6,8 +6,9 @@ mod newc;
 mod utils;
 
 use config::Config;
+use newc::Encoder;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::{App, AppSettings, Arg, SubCommand};
 use env_logger::Env;
 use log::warn;
@@ -30,6 +31,14 @@ fn main() -> Result<()> {
                 .takes_value(true)
                 .global(true)
                 .help("Path to the configuration file"),
+        )
+        .arg(
+            Arg::with_name("encoder")
+                .short("e")
+                .long("encoder")
+                .takes_value(true)
+                .global(true)
+                .help("Encoder to use for compression"),
         )
         .subcommand(
             SubCommand::with_name("initramfs")
@@ -76,6 +85,15 @@ fn main() -> Result<()> {
     let data = fs::read(config_path)?;
     let config: Config = toml::from_slice(&data)?;
 
+    let encoder = match matches.value_of("encoder") {
+        Some("none") => Encoder::None,
+        Some("gzip") => Encoder::Gzip,
+        Some("zstd") => Encoder::Zstd,
+        Some(other) => bail!("unknown encoder: {}", other),
+        // use gzip by default
+        None => Encoder::Gzip,
+    };
+
     match matches.subcommand() {
         ("initramfs", Some(initramfs)) => {
             let output = initramfs.value_of("output").unwrap();
@@ -83,14 +101,14 @@ fn main() -> Result<()> {
             let kver = initramfs.value_of("kver").map(|kver| kver.into());
 
             let builder = initramfs::Builder::from_config(config.initramfs, kver)?;
-            builder.build(output, ucode)?;
+            builder.build(encoder, output, ucode)?;
         }
-        ("microcode", Some(microcode)) => {
+        ("micr", Some(microcode)) => {
             let output = microcode.value_of("output").unwrap();
 
             if let Some(microcode) = config.microcode {
                 let builder = microcode::Builder::from_config(microcode)?;
-                builder.build(output)?;
+                builder.build(encoder, output)?;
             } else {
                 warn!("No configuration provided for microcode generation");
             }

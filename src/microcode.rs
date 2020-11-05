@@ -5,12 +5,10 @@
 //! specification.
 
 use crate::config::Microcode;
-use crate::newc::Archive;
+use crate::newc::{Archive, Encoder};
 use crate::utils;
 
 use anyhow::Result;
-use flate2::write::GzEncoder;
-use flate2::Compression;
 use log::{info, warn};
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -54,7 +52,7 @@ impl Builder {
 
     /// Build the microcode bundle by writing all entries to a temporary directory
     /// and the walking it to create the compressed cpio archive
-    pub(crate) fn build<P>(self, output: P) -> Result<()>
+    pub(crate) fn build<P>(self, encoder: Encoder, output: P) -> Result<()>
     where
         P: AsRef<Path>,
     {
@@ -81,9 +79,8 @@ impl Builder {
         }
 
         let output_file = utils::maybe_stdout(&output)?;
-        let mut encoder = GzEncoder::new(output_file, Compression::default());
         let archive = Archive::from_root(tmp_path)?;
-        archive.write(&mut encoder)?;
+        archive.write(encoder, output_file)?;
 
         Ok(())
     }
