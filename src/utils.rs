@@ -63,3 +63,43 @@ where
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::{TempDir, NamedTempFile};
+
+    #[test]
+    fn test_maybe_io() -> Result<()> {
+        let named = NamedTempFile::new()?;
+        let path = named.path();
+
+        maybe_stdin("-")?;
+        maybe_stdin(path)?;
+
+        maybe_stdout("-")?;
+        maybe_stdout(path)?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_copy_files() -> Result<()> {
+        let src_dir = TempDir::new()?;
+        let dst_dir = TempDir::new()?;
+
+        let src_path = src_dir.path();
+        let dst_path = dst_dir.path();
+
+        fs::create_dir_all(src_path.join("dir"))?;
+        File::create(src_path.join("root"))?;
+        File::create(src_path.join("dir/recursive"))?;
+
+        copy_files(src_path, dst_path)?;
+
+        assert!(Path::exists(&dst_path.join("root")));
+        assert!(Path::exists(&dst_path.join("dir/recursive")));
+
+        Ok(())
+    }
+}
