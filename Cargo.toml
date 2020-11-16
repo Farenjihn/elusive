@@ -1,6 +1,6 @@
 [package]
 name = "elusive"
-version = "0.2.3"
+version = "0.3.0"
 authors = ["Valentin Finini <valentin.finini@cysec.systems>"]
 edition = "2018"
 
