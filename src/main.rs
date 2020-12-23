@@ -81,7 +81,7 @@ fn main() -> Result<()> {
 
     let matches = app.get_matches();
 
-    let config_path = matches.value_of("config").unwrap_or_else(|| CONFIG_PATH);
+    let config_path = matches.value_of("config").unwrap_or(CONFIG_PATH);
     let data = fs::read(config_path)?;
     let config: Config = toml::from_slice(&data)?;
 
