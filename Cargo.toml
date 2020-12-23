@@ -5,23 +5,23 @@ authors = ["Valentin Finini <valentin.finini@cysec.systems>"]
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.34"
+anyhow = "1.0.36"
 clap = "2.33.3"
-env_logger = "0.8.1"
+env_logger = "0.8.2"
 flate2 = "1.0.19"
 fs_extra = "1.2.0"
-libc = "0.2.80"
+libc = "0.2.81"
 log = "0.4.11"
 tempfile = "3.1.0"
-toml = "0.5.7"
+toml = "0.5.8"
 walkdir = "2.3.1"
-zstd = "0.5.3"
+zstd = "0.6.0"
 
 [dependencies.goblin]
-version = "0.2.3"
+version = "0.3.0"
 default_features = false
 features = ["std", "elf32", "elf64", "endian_fd"]
 
 [dependencies.serde]
-version = "1.0.117"
+version = "1.0.118"
 features = ["derive"]
