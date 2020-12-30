@@ -17,13 +17,12 @@ copy = [
 ]
 
 # Trees can also copy directory contents as well as files
-#
-# [[initramfs.tree]]
-# path = "/lib/udev/rules.d"
-# copy = [
-#     "/lib/udev/rules.d/10-dm.rules",
-#     "/lib/udev/rules.d",
-# ]
+[[initramfs.tree]]
+path = "/lib/udev/rules.d"
+copy = [
+    "/lib/udev/rules.d/10-dm.rules",
+    "/lib/udev/rules.d",
+]
 
 [microcode]
 amd = "/lib/firmware/amd-ucode"
