@@ -17,16 +17,17 @@ impl<'a> Resolver<'a> {
         Resolver { paths }
     }
 
-    pub(crate) fn resolve(&self) -> Result<HashSet<PathBuf>> {
+    pub(crate) fn resolve(&self) -> Result<Vec<PathBuf>> {
         let mut resolved = HashSet::new();
 
         for path in self.paths {
             let data = fs::read(path)?;
+
             let elf = match Elf::parse(&data) {
                 Ok(elf) => elf,
-                Err(_) => {
+                Err(err) => {
                     error!("Failed to parse binary: {}", path.display());
-                    bail!("only ELF binaries are supported");
+                    bail!("only ELF binaries are supported: {}", err);
                 }
             };
 
@@ -34,6 +35,10 @@ impl<'a> Resolver<'a> {
                 walk_linkmap(lib, &mut resolved)?;
             }
         }
+
+        // sort dependencies to try and make archives at least somewhat reproducible
+        let mut resolved: Vec<PathBuf> = resolved.into_iter().collect();
+        resolved.sort();
 
         Ok(resolved)
     }
@@ -110,4 +115,42 @@ struct link_map {
     l_ld: *mut libc::c_void,
     l_next: *mut libc::c_void,
     l_prev: *mut libc::c_void,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolver() -> Result<()> {
+        let ls = PathBuf::from("/bin/ls");
+
+        if ls.exists() {
+            let paths = [ls];
+
+            let resolver = Resolver::new(&paths);
+            let libraries = resolver.resolve()?;
+
+            let mut found_libc = false;
+
+            for lib in libraries {
+                if lib
+                    .file_name()
+                    .expect("library path should have filename")
+                    .to_str()
+                    .expect("filename should be valid utf8")
+                    .starts_with("libc")
+                {
+                    found_libc = true;
+                    break;
+                }
+            }
+
+            if !found_libc {
+                bail!("resolver did not list libc in dependencies")
+            }
+        }
+
+        Ok(())
+    }
 }

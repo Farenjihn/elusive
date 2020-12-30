@@ -82,11 +82,15 @@ pub struct Tree {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use anyhow::Result;
     use std::fs;
 
     #[test]
-    fn test_config() {
-        let data = fs::read("example.toml").unwrap();
-        toml::from_slice::<Config>(&data).unwrap();
+    fn test_config() -> Result<()> {
+        let data = fs::read("example.toml")?;
+        toml::from_slice::<Config>(&data)?;
+
+        Ok(())
     }
 }

@@ -15,6 +15,7 @@ use std::fs;
 const CONFIG_PATH: &str = "/etc/elusive.toml";
 
 /// Entrypoint of the program
+#[cfg(not(tarpaulin_include))]
 fn main() -> Result<()> {
     let env = Env::default().filter_or("RUST_LOG", "info");
     env_logger::init_from_env(env);
@@ -98,8 +99,7 @@ fn main() -> Result<()> {
             }
 
             let initramfs = Initramfs::from_config(config.initramfs)?;
-            let archive = initramfs.build()?;
-            let encoded = encoder.encode(archive)?;
+            let encoded = encoder.encode_archive(initramfs.build())?;
             data.extend(encoded);
 
             info!("Writing initramfs to: {}", output);
@@ -110,8 +110,7 @@ fn main() -> Result<()> {
 
             if let Some(microcode) = config.microcode {
                 let bundle = MicrocodeBundle::from_config(microcode)?;
-                let archive = bundle.build()?;
-                let encoded = encoder.encode(archive)?;
+                let encoded = encoder.encode_archive(bundle.build())?;
 
                 info!("Writing microcode cpio to: {}", output);
                 utils::write_output(output, &encoded)?;
