@@ -9,5 +9,5 @@
 
 
 > To shutdown the virtual machine, type 'poweroff -f'"
-> To change the contents of the initramfs, edit configuration.toml"
+> To change the contents of the initramfs, edit 'example.toml'"
 

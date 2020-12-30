@@ -13,7 +13,7 @@ path = "/lib64/ld-linux-x86-64.so.2"
 [[initramfs.tree]]
 path = "/etc"
 copy = [
-    "hello.txt",
+    "example/motd",
 ]
 
 # Trees can also copy directory contents as well as files
