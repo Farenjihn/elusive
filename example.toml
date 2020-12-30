@@ -11,11 +11,19 @@ path = "/sbin/cryptsetup"
 path = "/lib64/ld-linux-x86-64.so.2"
 
 [[initramfs.tree]]
-path = "/lib/udev/rules.d"
+path = "/etc"
 copy = [
-    "/lib/udev/rules.d/10-dm.rules",
-    "/lib/udev/rules.d",
+    "hello.txt",
 ]
+
+# Trees can also copy directory contents as well as files
+#
+# [[initramfs.tree]]
+# path = "/lib/udev/rules.d"
+# copy = [
+#     "/lib/udev/rules.d/10-dm.rules",
+#     "/lib/udev/rules.d",
+# ]
 
 [microcode]
 amd = "/lib/firmware/amd-ucode"
