@@ -2,7 +2,7 @@
 
 /bin/busybox --install -s /bin
 
-cat /etc/hello.txt
+cat /etc/motd
 
 PS1="root@initramfs \\$ " sh
 
