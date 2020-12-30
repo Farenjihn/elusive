@@ -17,8 +17,5 @@ copy = [
     "/lib/udev/rules.d",
 ]
 
-[[initramfs.module]]
-name = "btrfs"
-
 [microcode]
 amd = "/lib/firmware/amd-ucode"
