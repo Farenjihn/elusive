@@ -6,7 +6,7 @@ use flate2::Compression;
 use std::io::Write;
 use zstd::stream::write::Encoder as ZstdEncoder;
 
-/// Represents the compression encoder used for the archive
+/// Represents the compression encoder used for an archive
 pub enum Encoder {
     None,
     Gzip,
@@ -14,6 +14,7 @@ pub enum Encoder {
 }
 
 impl Encoder {
+    /// Encode the provided archive using the specified encoder variant
     pub fn encode(&self, archive: Archive) -> Result<Vec<u8>> {
         let data = archive.into_bytes()?;
         let mut buf = Vec::new();

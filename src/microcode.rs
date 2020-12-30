@@ -9,7 +9,7 @@ use crate::newc::{Archive, Entry, EntryBuilder};
 
 use anyhow::Result;
 use std::fs;
-use std::path::{Path};
+use std::path::Path;
 
 /// Path where the blobs will be searched by the Linux kernel
 const UCODE_TREE: &str = "/kernel/x86/microcode";
@@ -51,6 +51,7 @@ impl MicrocodeBundle {
         Ok(bundle)
     }
 
+    /// Bundle amd microcode from the provided path
     pub fn add_amd_ucode(&mut self, path: &Path) -> Result<()> {
         let name = Path::new(UCODE_TREE).join(AMD_UCODE_NAME);
         let data = bundle_ucode(&path)?;
@@ -64,6 +65,7 @@ impl MicrocodeBundle {
         Ok(())
     }
 
+    /// Bundle intel microcode from the provided path
     pub fn add_intel_ucode(&mut self, path: &Path) -> Result<()> {
         let name = Path::new(UCODE_TREE).join(INTEL_UCODE_NAME);
         let data = bundle_ucode(&path)?;
@@ -77,14 +79,14 @@ impl MicrocodeBundle {
         Ok(())
     }
 
-    /// Build the microcode bundle by writing all entries to a temporary directory
-    /// and the walking it to create the cpio archive
+    /// Return an archive from this microcode bundle
     pub fn build(self) -> Result<Archive> {
         let archive = Archive::new(self.entries);
         Ok(archive)
     }
 }
 
+/// Create directory entries by recursively walking the provided path
 fn mkdir_all(entries: &mut Vec<Entry>, path: &Path) {
     if path == Path::new("/") {
         return;

@@ -27,19 +27,14 @@ pub struct Archive {
 }
 
 impl Archive {
+    /// Create a new archive from the provided entries
     pub fn new(entries: Vec<Entry>) -> Self {
         Archive { entries }
     }
 
+    /// Serialize this entry into cpio newc format
     pub fn into_bytes(self) -> Result<Vec<u8>> {
         let mut buf = Vec::new();
-
-        // // sort entries so it looks nice
-        // self.entries.sort_by(|le, re| {
-        //     le.name
-        //         .partial_cmp(&re.name)
-        //         .expect("order should exist between entries")
-        // });
 
         // iterate and lazily assign new inode number
         for (index, mut entry) in self.entries.into_iter().enumerate() {
@@ -54,12 +49,14 @@ impl Archive {
     }
 }
 
+/// Represent the name of a cpio entry
 #[derive(Default, Debug)]
 pub struct EntryName {
     name: Vec<u8>,
 }
 
 impl EntryName {
+    /// Get a null byte terminated vector for this entry name
     pub fn into_bytes_with_nul(self) -> Result<Vec<u8>> {
         let cstr = CString::new(self.name)?;
         Ok(cstr.into_bytes_with_nul())
