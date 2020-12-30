@@ -265,8 +265,7 @@ impl Initramfs {
         Ok(())
     }
 
-    /// Build the initramfs by writing all entries to a temporary directory
-    /// and then walking it to create the cpio archive
+    /// Return an archive from this initramfs
     pub fn build(self) -> Result<Archive> {
         let archive = Archive::new(self.entries);
         Ok(archive)
@@ -303,6 +302,7 @@ impl Initramfs {
         Ok(())
     }
 
+    /// Create directory entries by recursively walking the provided path
     fn mkdir_all(&mut self, path: &Path) {
         if self.cache.contains(path) {
             return;
