@@ -7,8 +7,10 @@
 use anyhow::Result;
 use std::convert::TryInto;
 use std::ffi::CString;
+use std::fmt;
 use std::fs::Metadata;
 use std::io::Write;
+use std::ops::Deref;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
@@ -22,6 +24,7 @@ const TRAILER: &str = "TRAILER!!!";
 const INO_OFFSET: u64 = 1337;
 
 /// Represents a cpio archive
+#[derive(PartialEq, Debug)]
 pub struct Archive {
     entries: Vec<Entry>,
 }
@@ -50,7 +53,7 @@ impl Archive {
 }
 
 /// Represent the name of a cpio entry
-#[derive(Default, Debug)]
+#[derive(PartialEq, Default)]
 pub struct EntryName {
     name: Vec<u8>,
 }
@@ -82,8 +85,42 @@ where
     }
 }
 
+impl fmt::Debug for EntryName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EntryName")
+            .field("name", &String::from_utf8_lossy(&self.name))
+            .finish()
+    }
+}
+
+/// Wrapper type for data
+#[derive(PartialEq)]
+pub struct EntryData {
+    data: Vec<u8>,
+}
+
+impl EntryData {
+    fn new(data: Vec<u8>) -> Self {
+        EntryData { data }
+    }
+}
+
+impl Deref for EntryData {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl fmt::Debug for EntryData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("EntryData(<data>)")
+    }
+}
+
 /// Cpio newc entry
-#[derive(Default)]
+#[derive(PartialEq, Default, Debug)]
 pub struct Entry {
     /// Name of the entry (path)
     name: EntryName,
@@ -108,7 +145,7 @@ pub struct Entry {
     /// Rdev minor number of the entry
     rdev_minor: u64,
     /// Data is entry is a regular file or symlink
-    data: Option<Vec<u8>>,
+    data: Option<EntryData>,
 }
 
 impl Entry {
@@ -130,7 +167,7 @@ impl Entry {
     {
         Entry {
             name: name.into(),
-            data: Some(data),
+            data: Some(EntryData::new(data)),
             ..Entry::default()
         }
     }
@@ -300,11 +337,26 @@ mod tests {
 
     #[test]
     fn test_builder() -> Result<()> {
-        let data = b"somedata".to_vec();
-        let entry = EntryBuilder::file("testfile", data).build();
+        let entry = EntryBuilder::file("/testfile", b"datadatadata".to_vec()).build();
 
         let mut buf = Vec::new();
         entry.write(&mut buf)?;
+
+        assert!(buf.len() > 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_serialize() -> Result<()> {
+        let empty = Archive::new(Vec::new());
+        let trailer = EntryBuilder::trailer().build();
+
+        let mut buf = Vec::new();
+        trailer.write(&mut buf)?;
+
+        // an empty archive is just a trailer entry
+        assert_eq!(empty.into_bytes()?, buf);
 
         Ok(())
     }

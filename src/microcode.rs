@@ -106,9 +106,8 @@ impl MicrocodeBundle {
     }
 
     /// Return an archive from this microcode bundle
-    pub fn build(self) -> Result<Archive> {
-        let archive = Archive::new(self.entries);
-        Ok(archive)
+    pub fn build(self) -> Archive {
+        Archive::new(self.entries)
     }
 }
 

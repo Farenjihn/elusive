@@ -15,12 +15,17 @@ pub enum Encoder {
 
 impl Encoder {
     /// Encode the provided archive using the specified encoder variant
-    pub fn encode(&self, archive: Archive) -> Result<Vec<u8>> {
+    pub fn encode_archive(&self, archive: Archive) -> Result<Vec<u8>> {
         let data = archive.into_bytes()?;
+        self.encode(&data)
+    }
+
+    /// Encode the provided bytes using the specified encoder variant
+    pub fn encode(&self, data: &[u8]) -> Result<Vec<u8>> {
         let mut buf = Vec::new();
 
         match self {
-            Encoder::None => return Ok(data),
+            Encoder::None => return Ok(data.to_vec()),
             Encoder::Gzip => {
                 let mut gzenc = GzEncoder::new(&mut buf, Compression::default());
                 gzenc.write_all(&data)?;
@@ -33,5 +38,38 @@ impl Encoder {
         }
 
         Ok(buf)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::newc::EntryBuilder;
+
+    #[test]
+    fn test_encode() -> Result<()> {
+        let archive = Archive::new(vec![EntryBuilder::file(
+            "/testfile",
+            b"datadatadata".to_vec(),
+        )
+        .build()]);
+
+        let data = archive.into_bytes()?;
+
+        let none_enc = Encoder::None;
+        let gzip_enc = Encoder::Zstd;
+        let zstd_enc = Encoder::Zstd;
+
+        let none = none_enc.encode(&data)?;
+        let gzip = gzip_enc.encode(&data)?;
+        let zstd = zstd_enc.encode(&data)?;
+
+        // gzip should always compress better
+        assert!(none.len() > gzip.len());
+
+        // zstd should always compress better
+        assert!(none.len() > zstd.len());
+
+        Ok(())
     }
 }

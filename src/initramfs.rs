@@ -140,29 +140,6 @@ impl Initramfs {
         Ok(())
     }
 
-    /// Add the kernel module from the provided path to the initramfs
-    pub fn add_module(&mut self, path: &Path) -> Result<()> {
-        if self.cache.contains(path) {
-            return Ok(());
-        }
-
-        info!("Adding kernel module: {}", path.display());
-
-        self.mkdir_all(path.parent().expect("path should have parent"));
-
-        let metadata = fs::metadata(&path)?;
-        let data = fs::read(&path)?;
-
-        let entry = EntryBuilder::file(&path, data)
-            .with_metadata(metadata)
-            .build();
-
-        self.cache.insert(path.to_path_buf());
-        self.entries.push(entry);
-
-        Ok(())
-    }
-
     /// Add the binary from the provided path to the initramfs
     pub fn add_binary(&mut self, path: &Path) -> Result<()> {
         if self.cache.contains(path) {
@@ -267,9 +244,8 @@ impl Initramfs {
     }
 
     /// Return an archive from this initramfs
-    pub fn build(self) -> Result<Archive> {
-        let archive = Archive::new(self.entries);
-        Ok(archive)
+    pub fn build(self) -> Archive {
+        Archive::new(self.entries)
     }
 }
 
@@ -319,5 +295,44 @@ impl Initramfs {
 
         let entry = EntryBuilder::directory(path).mode(DEFAULT_DIR_MODE).build();
         self.entries.push(entry);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config;
+
+    #[test]
+    fn test_initramfs() -> Result<()> {
+        let mut initramfs = Initramfs::new()?;
+
+        let mut config = config::Initramfs {
+            init: PathBuf::from("/sbin/init"),
+            bin: None,
+            lib: None,
+            tree: None,
+        };
+
+        initramfs.add_init(Path::new("/sbin/init"))?;
+
+        let ls = PathBuf::from("/bin/ls");
+        if ls.exists() {
+            config.bin = Some(vec![config::Binary { path: ls.clone() }]);
+
+            let list = &[ls.clone()];
+            let resolver = Resolver::new(list);
+            let libraries = resolver.resolve()?;
+
+            initramfs.add_binary(&ls)?;
+
+            for lib in libraries {
+                initramfs.add_library(&lib)?;
+            }
+        }
+
+        assert_eq!(initramfs.build(), Initramfs::from_config(config)?.build());
+
+        Ok(())
     }
 }
