@@ -2,104 +2,40 @@
 
 use anyhow::Result;
 use std::ffi::OsStr;
-use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::{fs, io};
 
 /// Allow reading from either a file or standard input
-pub(crate) fn maybe_stdin<P>(path: P) -> Result<Box<dyn Read>>
+pub fn read_input<P>(path: P) -> Result<Vec<u8>>
 where
     P: AsRef<Path>,
 {
-    if path.as_ref() == OsStr::new("-") {
-        Ok(Box::new(io::stdin()))
+    let path = path.as_ref();
+
+    if path == OsStr::new("-") {
+        let mut buf = Vec::new();
+        io::stdin().read_to_end(&mut buf)?;
+
+        Ok(buf)
     } else {
-        Ok(Box::new(File::open(&path)?))
+        let data = fs::read(path)?;
+        Ok(data)
     }
 }
 
 /// Allow writing to either a file or standard output
-pub(crate) fn maybe_stdout<P>(path: P) -> Result<Box<dyn Write>>
+pub fn write_output<P>(path: P, data: &[u8]) -> Result<()>
 where
     P: AsRef<Path>,
 {
-    if path.as_ref() == OsStr::new("-") {
-        Ok(Box::new(io::stdout()))
+    let path = path.as_ref();
+
+    if path == OsStr::new("-") {
+        io::stdout().write_all(data)?;
     } else {
-        Ok(Box::new(File::create(&path)?))
-    }
-}
-
-/// Copy files
-pub(crate) fn copy_files<S, D>(source: S, dest: D) -> Result<()>
-where
-    S: AsRef<Path>,
-    D: AsRef<Path>,
-{
-    let source = source.as_ref();
-    let dest = dest.as_ref();
-
-    let parent = dest.parent().expect("path should have a parent");
-    fs::create_dir_all(parent)?;
-
-    let metadata = fs::metadata(&source)?;
-    let ty = metadata.file_type();
-
-    if ty.is_file() {
-        fs::copy(&source, &dest)?;
-    } else if ty.is_dir() {
-        let options = fs_extra::dir::CopyOptions {
-            overwrite: true,
-            skip_exist: false,
-            buffer_size: 64000,
-            copy_inside: true,
-            content_only: true,
-            depth: 0,
-        };
-
-        fs_extra::dir::copy(&source, &dest, &options)?;
+        fs::write(path, data)?;
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::{NamedTempFile, TempDir};
-
-    #[test]
-    fn test_maybe_io() -> Result<()> {
-        let named = NamedTempFile::new()?;
-        let path = named.path();
-
-        maybe_stdin("-")?;
-        maybe_stdin(path)?;
-
-        maybe_stdout("-")?;
-        maybe_stdout(path)?;
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_copy_files() -> Result<()> {
-        let src_dir = TempDir::new()?;
-        let dst_dir = TempDir::new()?;
-
-        let src_path = src_dir.path();
-        let dst_path = dst_dir.path();
-
-        fs::create_dir_all(src_path.join("dir"))?;
-        File::create(src_path.join("root"))?;
-        File::create(src_path.join("dir/recursive"))?;
-
-        copy_files(src_path, dst_path)?;
-
-        assert!(Path::exists(&dst_path.join("root")));
-        assert!(Path::exists(&dst_path.join("dir/recursive")));
-
-        Ok(())
-    }
 }

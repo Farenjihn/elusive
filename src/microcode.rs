@@ -5,120 +5,110 @@
 //! specification.
 
 use crate::config::Microcode;
-use crate::newc::{Archive, Encoder};
-use crate::utils;
+use crate::newc::{Archive, Entry, EntryBuilder};
 
 use anyhow::Result;
-use log::{info, warn};
-use std::fs::File;
-use std::path::{Path, PathBuf};
-use std::{fs, io};
-use tempfile::TempDir;
+use std::fs;
+use std::path::{Path};
 
 /// Path where the blobs will be searched by the Linux kernel
-const UCODE_TREE: &str = "kernel/x86/microcode";
+const UCODE_TREE: &str = "/kernel/x86/microcode";
 
 /// Name of the microcode blob for AMD
 const AMD_UCODE_NAME: &str = "AuthenticAMD.bin";
 /// Name of the microcode blob for Intel
 const INTEL_UCODE_NAME: &str = "GenuineIntel.bin";
 
+const DEFAULT_DIR_MODE: u32 = 0o040000 + 0o755;
+const DEFAULT_FILE_MODE: u32 = 0o100000 + 0o755;
+
 /// Builder pattern for microcode bundle generation
-pub(crate) struct Builder {
-    /// Optional path to AMD specific blobs
-    amd: Option<PathBuf>,
-    /// Optional path to Intel specific blobs
-    intel: Option<PathBuf>,
+pub struct MicrocodeBundle {
+    entries: Vec<Entry>,
 }
 
-impl Builder {
-    /// Create a new builder
-    pub(crate) fn new() -> Result<Self> {
-        Ok(Builder {
-            amd: None,
-            intel: None,
-        })
+impl MicrocodeBundle {
+    /// Create a new bundle
+    pub fn new() -> Result<Self> {
+        let mut entries = Vec::new();
+        mkdir_all(&mut entries, Path::new(UCODE_TREE));
+
+        Ok(MicrocodeBundle { entries })
     }
 
-    /// Create a new builder from a configuration
-    pub(crate) fn from_config(config: Microcode) -> Result<Self> {
-        let mut builder = Builder::new()?;
+    /// Create a new bundle from a configuration
+    pub fn from_config(config: Microcode) -> Result<Self> {
+        let mut bundle = MicrocodeBundle::new()?;
 
-        builder.amd = config.amd;
-        builder.intel = config.intel;
+        if let Some(path) = config.amd {
+            bundle.add_amd_ucode(&path)?;
+        }
 
-        Ok(builder)
+        if let Some(path) = config.intel {
+            bundle.add_intel_ucode(&path)?;
+        }
+
+        Ok(bundle)
     }
 
-    /// Build the microcode bundle by writing all entries to a temporary directory
-    /// and the walking it to create the compressed cpio archive
-    pub(crate) fn build<P>(self, encoder: Encoder, output: P) -> Result<()>
-    where
-        P: AsRef<Path>,
-    {
-        let output = output.as_ref();
-        info!("Writing microcode cpio to: {}", output.display());
+    pub fn add_amd_ucode(&mut self, path: &Path) -> Result<()> {
+        let name = Path::new(UCODE_TREE).join(AMD_UCODE_NAME);
+        let data = bundle_ucode(&path)?;
 
-        let tmp = TempDir::new()?;
-        let tmp_path = tmp.path();
+        let entry = EntryBuilder::file(name, data)
+            .mode(DEFAULT_FILE_MODE)
+            .build();
 
-        let ucode_tree = tmp_path.join(UCODE_TREE);
-        fs::create_dir_all(&ucode_tree)?;
-
-        if let (None, None) = (&self.amd, &self.intel) {
-            warn!("Nothing to do...");
-            return Ok(());
-        }
-
-        if let Some(amd) = &self.amd {
-            add_amd(amd, &ucode_tree)?;
-        }
-
-        if let Some(intel) = &self.intel {
-            add_intel(intel, &ucode_tree)?;
-        }
-
-        let output_file = utils::maybe_stdout(&output)?;
-        let archive = Archive::from_root(tmp_path)?;
-        archive.write(encoder, output_file)?;
+        self.entries.push(entry);
 
         Ok(())
     }
+
+    pub fn add_intel_ucode(&mut self, path: &Path) -> Result<()> {
+        let name = Path::new(UCODE_TREE).join(INTEL_UCODE_NAME);
+        let data = bundle_ucode(&path)?;
+
+        let entry = EntryBuilder::file(name, data)
+            .mode(DEFAULT_FILE_MODE)
+            .build();
+
+        self.entries.push(entry);
+
+        Ok(())
+    }
+
+    /// Build the microcode bundle by writing all entries to a temporary directory
+    /// and the walking it to create the cpio archive
+    pub fn build(self) -> Result<Archive> {
+        let archive = Archive::new(self.entries);
+        Ok(archive)
+    }
 }
 
-/// Add the AMD specific blob to the bundle
-fn add_amd<P>(dir: &Path, output: P) -> Result<()>
-where
-    P: AsRef<Path>,
-{
-    let output = output.as_ref().join(AMD_UCODE_NAME);
-    bundle_ucode(dir, output)
-}
+fn mkdir_all(entries: &mut Vec<Entry>, path: &Path) {
+    if path == Path::new("/") {
+        return;
+    }
 
-/// Add the Intel specific blob to the bundle
-fn add_intel<P>(dir: &Path, output: P) -> Result<()>
-where
-    P: AsRef<Path>,
-{
-    let output = output.as_ref().join(INTEL_UCODE_NAME);
-    bundle_ucode(dir, output)
+    if let Some(parent) = path.parent() {
+        mkdir_all(entries, parent);
+    }
+
+    let entry = EntryBuilder::directory(path).mode(DEFAULT_DIR_MODE).build();
+    entries.push(entry);
 }
 
 /// Bundle multiple vendor specific microcode blobs into a single blob
-fn bundle_ucode<P>(dir: &Path, output: P) -> Result<()>
-where
-    P: AsRef<Path>,
-{
-    let mut output_file = File::create(output.as_ref())?;
+fn bundle_ucode(dir: &Path) -> Result<Vec<u8>> {
+    let mut data = Vec::new();
 
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
 
         if entry.file_type()?.is_file() {
-            let mut file = File::open(entry.path())?;
-            io::copy(&mut file, &mut output_file)?;
+            data.extend(fs::read(entry.path())?);
         }
     }
 
-    Ok(())
+    Ok(data)
 }

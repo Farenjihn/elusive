@@ -20,17 +20,17 @@ impl<'a> Resolver<'a> {
     pub(crate) fn resolve(&self) -> Result<HashSet<PathBuf>> {
         let mut resolved = HashSet::new();
 
-        for source in self.paths {
-            let bin = fs::read(source)?;
-            let bin = match Elf::parse(&bin) {
-                Ok(bin) => bin,
+        for path in self.paths {
+            let data = fs::read(path)?;
+            let elf = match Elf::parse(&data) {
+                Ok(elf) => elf,
                 Err(_) => {
-                    error!("Failed to parse binary: {}", source.display());
+                    error!("Failed to parse binary: {}", path.display());
                     bail!("only ELF binaries are supported");
                 }
             };
 
-            for lib in bin.libraries {
+            for lib in elf.libraries {
                 walk_linkmap(lib, &mut resolved)?;
             }
         }
@@ -41,7 +41,7 @@ impl<'a> Resolver<'a> {
 
 fn walk_linkmap(lib: &str, resolved: &mut HashSet<PathBuf>) -> Result<()> {
     let name = CString::new(lib)?;
-    let mut linkmap: MaybeUninit<*mut link_map> = MaybeUninit::uninit();
+    let mut linkmap = MaybeUninit::<*mut link_map>::uninit();
 
     let handle = unsafe { libc::dlopen(name.as_ptr(), libc::RTLD_LAZY) };
     if handle.is_null() {

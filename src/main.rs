@@ -1,16 +1,13 @@
-mod config;
-mod depend;
-mod initramfs;
-mod microcode;
-mod newc;
-mod utils;
-
-use config::Config;
-use newc::Encoder;
+use elusive::config::Config;
+use elusive::encoder::Encoder;
+use elusive::initramfs::Initramfs;
+use elusive::microcode::MicrocodeBundle;
+use elusive::utils;
 
 use anyhow::{bail, Result};
 use clap::{App, AppSettings, Arg, SubCommand};
 use env_logger::Env;
+use log::info;
 use log::warn;
 use std::fs;
 
@@ -43,13 +40,6 @@ fn main() -> Result<()> {
         .subcommand(
             SubCommand::with_name("initramfs")
                 .about("Generate a compressed cpio archive for initramfs")
-                .arg(
-                    Arg::with_name("kver")
-                        .short("k")
-                        .long("kver")
-                        .help("Kernel version to look up modules")
-                        .takes_value(true),
-                )
                 .arg(
                     Arg::with_name("ucode")
                         .short("u")
@@ -98,17 +88,33 @@ fn main() -> Result<()> {
         ("initramfs", Some(initramfs)) => {
             let output = initramfs.value_of("output").unwrap();
             let ucode = initramfs.value_of("ucode");
-            let kver = initramfs.value_of("kver").map(|kver| kver.into());
 
-            let builder = initramfs::Builder::from_config(config.initramfs, kver)?;
-            builder.build(encoder, output, ucode)?;
+            let mut data = Vec::new();
+
+            if let Some(path) = ucode {
+                info!("Adding microcode bundle from: {}", path);
+                let ucode = fs::read(path)?;
+                data.extend(ucode);
+            }
+
+            let initramfs = Initramfs::from_config(config.initramfs)?;
+            let archive = initramfs.build()?;
+            let encoded = encoder.encode(archive)?;
+            data.extend(encoded);
+
+            info!("Writing initramfs to: {}", output);
+            utils::write_output(output, &data)?;
         }
         ("microcode", Some(microcode)) => {
             let output = microcode.value_of("output").unwrap();
 
             if let Some(microcode) = config.microcode {
-                let builder = microcode::Builder::from_config(microcode)?;
-                builder.build(encoder, output)?;
+                let bundle = MicrocodeBundle::from_config(microcode)?;
+                let archive = bundle.build()?;
+                let encoded = encoder.encode(archive)?;
+
+                info!("Writing microcode cpio to: {}", output);
+                utils::write_output(output, &encoded)?;
             } else {
                 warn!("No configuration provided for microcode generation");
             }

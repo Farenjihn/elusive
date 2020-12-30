@@ -4,127 +4,100 @@
 //! that can be used with the Linux kernel to
 //! load an initramfs.
 
-use anyhow::{bail, Result};
-use flate2::write::GzEncoder;
-use flate2::Compression;
-use std::ffi::{CString, OsStr, OsString};
-use std::fs;
-use std::fs::{File, Metadata};
-use std::io::{Read, Seek, SeekFrom, Write};
+use anyhow::Result;
+use std::convert::TryInto;
+use std::ffi::CString;
+use std::fs::Metadata;
+use std::io::Write;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
-use zstd::stream::write::Encoder as ZstdEncoder;
+use std::path::Path;
 
 /// Magic number for newc cpio files
 const MAGIC: &[u8] = b"070701";
 /// Magic bytes for cpio trailer entries
 const TRAILER: &str = "TRAILER!!!";
 
-/// Represents the compression encoder used for the archive
-pub(crate) enum Encoder {
-    None,
-    Gzip,
-    Zstd,
-}
+/// Offset for inode number to avoid reserved inodes (arbitrary)
+const INO_OFFSET: u64 = 1337;
 
 /// Represents a cpio archive
-pub(crate) struct Archive {
+pub struct Archive {
     entries: Vec<Entry>,
 }
 
 impl Archive {
-    /// Create an archive from the provided root directory
-    ///
-    /// This will walk the archive, create all corresponding entries and write them
-    /// to a compressed cpio archive.
-    pub(crate) fn from_root<T>(root_dir: T) -> Result<Self>
-    where
-        T: AsRef<Path>,
-    {
-        let root_dir = root_dir.as_ref();
-        let walk = WalkDir::new(&root_dir).into_iter().skip(1).enumerate();
-
-        let mut entries = Vec::new();
-        for (index, dir_entry) in walk {
-            let dir_entry = dir_entry?;
-
-            let name = dir_entry.path().strip_prefix(&root_dir)?;
-
-            let metadata = dir_entry.metadata()?;
-            let ty = metadata.file_type();
-
-            let builder = if ty.is_dir() {
-                EntryBuilder::directory(&name)
-            } else if ty.is_file() {
-                let file = File::open(dir_entry.path())?;
-                EntryBuilder::file(&name, file)
-            } else if ty.is_symlink() {
-                let path = fs::read_link(dir_entry.path())?;
-                EntryBuilder::symlink(&name, path)
-            } else {
-                bail!("unknown file type: {:?}", ty);
-            };
-
-            let entry = builder.with_metadata(metadata).ino(index as u64).build();
-            entries.push(entry);
-        }
-
-        let archive = Archive { entries };
-        Ok(archive)
+    pub fn new(entries: Vec<Entry>) -> Self {
+        Archive { entries }
     }
 
-    pub(crate) fn write<T>(self, encoder: Encoder, mut writer: T) -> Result<()>
-    where
-        T: Write,
-    {
+    pub fn into_bytes(self) -> Result<Vec<u8>> {
         let mut buf = Vec::new();
-        for entry in self.entries {
+
+        // // sort entries so it looks nice
+        // self.entries.sort_by(|le, re| {
+        //     le.name
+        //         .partial_cmp(&re.name)
+        //         .expect("order should exist between entries")
+        // });
+
+        // iterate and lazily assign new inode number
+        for (index, mut entry) in self.entries.into_iter().enumerate() {
+            entry.ino = INO_OFFSET + index as u64;
             entry.write(&mut buf)?;
         }
 
-        let trailer = EntryBuilder::trailer().ino(0).build();
+        let trailer = EntryBuilder::trailer().build();
         trailer.write(&mut buf)?;
 
-        // write all entries + trailer using the specified encoder
-        match encoder {
-            Encoder::None => writer.write_all(&buf)?,
-            Encoder::Gzip => {
-                let mut gzenc = GzEncoder::new(writer, Compression::default());
-                gzenc.write_all(&buf)?;
-            }
-            Encoder::Zstd => {
-                let mut zstdenc = ZstdEncoder::new(writer, 3)?;
-                zstdenc.write_all(&buf)?;
-                zstdenc.finish()?;
-            }
-        }
-        Ok(())
+        Ok(buf)
     }
 }
 
-/// Type of a cpio entry
-pub(crate) enum EntryType {
-    /// Entry is a directory
-    Directory,
-    /// Entry is a file
-    File(File),
-    /// Entry is a symlink to a file
-    Symlink(PathBuf),
-    /// Entry is a trailer delimiter
-    Trailer,
+#[derive(Default, Debug)]
+pub struct EntryName {
+    name: Vec<u8>,
 }
 
-/// Header for a cpio newc entry
+impl EntryName {
+    pub fn into_bytes_with_nul(self) -> Result<Vec<u8>> {
+        let cstr = CString::new(self.name)?;
+        Ok(cstr.into_bytes_with_nul())
+    }
+}
+
+impl<T> From<T> for EntryName
+where
+    T: AsRef<Path>,
+{
+    fn from(path: T) -> Self {
+        let path = path.as_ref();
+
+        let stripped = if path.has_root() {
+            path.strip_prefix("/").expect("path starts with /")
+        } else {
+            path
+        };
+
+        EntryName {
+            name: stripped.as_os_str().as_bytes().to_vec(),
+        }
+    }
+}
+
+/// Cpio newc entry
 #[derive(Default)]
-pub(crate) struct EntryHeader {
+pub struct Entry {
     /// Name of the entry (path)
-    name: OsString,
+    name: EntryName,
     /// Inode of the entry
     ino: u64,
     /// Mode of the entry
     mode: u32,
+    /// User id of the entry
+    uid: u64,
+    /// Group id of the entry
+    gid: u64,
     /// Number of links to the entry
     nlink: u64,
     /// Modification time of the entry
@@ -137,162 +110,170 @@ pub(crate) struct EntryHeader {
     rdev_major: u64,
     /// Rdev minor number of the entry
     rdev_minor: u64,
+    /// Data is entry is a regular file or symlink
+    data: Option<Vec<u8>>,
 }
 
-impl EntryHeader {
-    /// Create a header with the provided name
-    pub(crate) fn with_name<T>(name: T) -> Self
+impl Entry {
+    /// Create an entry with the provided name
+    fn new<T>(name: T) -> Self
     where
-        T: AsRef<OsStr>,
+        T: Into<EntryName>,
     {
-        EntryHeader {
-            name: name.as_ref().to_owned(),
-            ..EntryHeader::default()
+        Entry {
+            name: name.into(),
+            ..Entry::default()
+        }
+    }
+
+    /// Create an entry with a name and data
+    fn with_data<T>(name: T, data: Vec<u8>) -> Self
+    where
+        T: Into<EntryName>,
+    {
+        Entry {
+            name: name.into(),
+            data: Some(data),
+            ..Entry::default()
         }
     }
 }
 
-/// Cpio newc entry
-pub(crate) struct Entry {
-    /// Type of the entry
-    ty: EntryType,
-    /// Newc header for the entry
-    header: EntryHeader,
-}
-
 impl Entry {
     /// Serialize the entry to the passed buffer
-    pub(crate) fn write(mut self, buf: &mut Vec<u8>) -> Result<()> {
-        let file_size = match &mut self.ty {
-            EntryType::File(file) => {
-                let file_size = file.seek(SeekFrom::End(0))?;
-                file.seek(SeekFrom::Start(0))?;
-
-                file_size as usize
-            }
-            EntryType::Symlink(path) => path.as_os_str().len(),
-            _ => 0,
+    pub fn write(self, buf: &mut Vec<u8>) -> Result<()> {
+        let file_size = match &self.data {
+            Some(data) => data.len(),
+            None => 0,
         };
 
         // serialize the header for this entry
-        let filename = CString::new(self.header.name.as_os_str().as_bytes())?;
-        let filename = filename.into_bytes_with_nul();
+        let filename = self.name.into_bytes_with_nul()?;
 
         // magic + 8 * fields + filename + file
         buf.reserve(6 + (13 * 8) + filename.len() + file_size);
         buf.write_all(MAGIC)?;
-        write!(buf, "{:08x}", self.header.ino)?;
-        write!(buf, "{:08x}", self.header.mode)?;
-        write!(buf, "{:08x}", 0)?; // uid is always 0 (root)
-        write!(buf, "{:08x}", 0)?; // gid is always 0 (root)
-        write!(buf, "{:08x}", self.header.nlink)?;
-        write!(buf, "{:08x}", self.header.mtime)?;
+        write!(buf, "{:08x}", self.ino)?;
+        write!(buf, "{:08x}", self.mode)?;
+        write!(buf, "{:08x}", self.uid)?; // uid is always 0 (root)
+        write!(buf, "{:08x}", self.gid)?; // gid is always 0 (root)
+        write!(buf, "{:08x}", self.nlink)?;
+        write!(buf, "{:08x}", self.mtime)?;
         write!(buf, "{:08x}", file_size as usize)?;
-        write!(buf, "{:08x}", self.header.dev_major)?;
-        write!(buf, "{:08x}", self.header.dev_minor)?;
-        write!(buf, "{:08x}", self.header.rdev_major)?;
-        write!(buf, "{:08x}", self.header.rdev_minor)?;
+        write!(buf, "{:08x}", self.dev_major)?; // dev_major is always 0
+        write!(buf, "{:08x}", self.dev_minor)?; // dev_minor is always 0
+        write!(buf, "{:08x}", self.rdev_major)?;
+        write!(buf, "{:08x}", self.rdev_minor)?;
         write!(buf, "{:08x}", filename.len())?;
         write!(buf, "{:08x}", 0)?; // CRC, null bytes with our MAGIC
         buf.write_all(&filename)?;
         pad_buf(buf);
 
-        match &mut self.ty {
-            EntryType::File(file) => {
-                file.read_to_end(buf)?;
-            }
-            EntryType::Symlink(path) => {
-                buf.write_all(path.as_os_str().as_bytes())?;
-            }
-            _ => (),
+        if let Some(data) = &self.data {
+            buf.write_all(&data)?;
+            pad_buf(buf);
         }
 
-        pad_buf(buf);
         Ok(())
     }
 }
 
 /// Builder pattern for a cpio entry
-pub(crate) struct EntryBuilder {
+pub struct EntryBuilder {
     /// Entry being built
     entry: Entry,
 }
 
 impl EntryBuilder {
-    /// Create an entry with the directory type
-    pub(crate) fn directory<T>(name: T) -> Self
+    /// Create an entry representing a directory
+    pub fn directory<T>(name: T) -> Self
     where
-        T: AsRef<OsStr>,
+        T: Into<EntryName>,
     {
         EntryBuilder {
-            entry: Entry {
-                ty: EntryType::Directory,
-                header: EntryHeader::with_name(name),
-            },
+            entry: Entry::new(name),
         }
     }
 
-    /// Create an entry with the file type
-    pub(crate) fn file<T>(name: T, file: File) -> Self
+    /// Create an entry representing a regular file
+    pub fn file<T>(name: T, data: Vec<u8>) -> Self
     where
-        T: AsRef<OsStr>,
+        T: Into<EntryName>,
     {
         EntryBuilder {
-            entry: Entry {
-                ty: EntryType::File(file),
-                header: EntryHeader::with_name(name),
-            },
+            entry: Entry::with_data(name, data),
         }
     }
 
-    /// Create an entry with the symlink type
-    pub(crate) fn symlink<T>(name: T, path: PathBuf) -> Self
+    /// Create an entry representing a special file
+    pub fn special_file<T>(name: T) -> Self
     where
-        T: AsRef<OsStr>,
+        T: Into<EntryName>,
     {
         EntryBuilder {
-            entry: Entry {
-                ty: EntryType::Symlink(path),
-                header: EntryHeader::with_name(name),
-            },
+            entry: Entry::new(name),
         }
     }
 
-    /// Create an entry with the trailer type
-    pub(crate) fn trailer() -> Self {
+    /// Create an entry representing a symlink
+    pub fn symlink<T>(name: T, path: &Path) -> Self
+    where
+        T: Into<EntryName>,
+    {
+        let data = path.as_os_str().as_bytes().to_vec();
         EntryBuilder {
-            entry: Entry {
-                ty: EntryType::Trailer,
-                header: EntryHeader::with_name(TRAILER),
-            },
+            entry: Entry::with_data(name, data),
+        }
+    }
+
+    /// Create a trailer entry
+    pub fn trailer() -> Self {
+        EntryBuilder {
+            entry: Entry::new(TRAILER),
         }
     }
 
     /// Add the provided metadata to the entry
-    pub(crate) fn with_metadata(self, metadata: Metadata) -> Self {
-        self.mode(metadata.mode()).mtime(metadata.mtime() as u64)
-    }
+    pub fn with_metadata(self, metadata: Metadata) -> Self {
+        let rdev = metadata.rdev();
 
-    /// Set the inode for the entry
-    pub(crate) fn ino(mut self, ino: u64) -> Self {
-        self.entry.header.ino = ino;
-        self
+        self.mode(metadata.mode())
+            .mtime(
+                metadata
+                    .mtime()
+                    .try_into()
+                    .expect("timestamp does not fit in a u64"),
+            )
+            .rdev_major(major(rdev))
+            .rdev_minor(minor(rdev))
     }
 
     /// Set the mode for the entry
-    pub(crate) fn mode(mut self, mode: u32) -> Self {
-        self.entry.header.mode = mode;
+    pub fn mode(mut self, mode: u32) -> Self {
+        self.entry.mode = mode;
         self
     }
 
     /// Set the modification time for the entry
-    pub(crate) fn mtime(mut self, mtime: u64) -> Self {
-        self.entry.header.mtime = mtime;
+    pub fn mtime(mut self, mtime: u64) -> Self {
+        self.entry.mtime = mtime;
+        self
+    }
+
+    /// Set the major rdev number for the entry
+    pub fn rdev_major(mut self, rdev_major: u64) -> Self {
+        self.entry.rdev_major = rdev_major;
+        self
+    }
+
+    /// Set the minor rdev number for the entry
+    pub fn rdev_minor(mut self, rdev_minor: u64) -> Self {
+        self.entry.rdev_minor = rdev_minor;
         self
     }
 
     /// Build the entry
-    pub(crate) fn build(self) -> Entry {
+    pub fn build(self) -> Entry {
         self.entry
     }
 }
@@ -306,21 +287,24 @@ pub fn pad_buf(buf: &mut Vec<u8>) {
     }
 }
 
+/// Shamelessly taken from the `nix` crate, thanks !
+pub fn major(dev: u64) -> u64 {
+    ((dev >> 32) & 0xfffff000) | ((dev >> 8) & 0x00000fff)
+}
+
+/// Shamelessly taken from the `nix` crate, thanks !
+pub fn minor(dev: u64) -> u64 {
+    ((dev >> 12) & 0xffffff00) | ((dev) & 0x000000ff)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
 
     #[test]
     fn test_builder() -> Result<()> {
-        let temp = NamedTempFile::new()?;
-        let temp = temp.into_file();
-        let meta = temp.metadata()?;
-
-        let entry = EntryBuilder::file("testfile", temp)
-            .ino(1)
-            .with_metadata(meta)
-            .build();
+        let data = b"somedata".to_vec();
+        let entry = EntryBuilder::file("testfile", data).build();
 
         let mut buf = Vec::new();
         entry.write(&mut buf)?;

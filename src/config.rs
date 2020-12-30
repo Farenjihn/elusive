@@ -7,7 +7,7 @@
 //!
 //! An example configuration may look like:
 //!
-//! ```
+//! ```toml
 //! [initramfs]
 //! init = "init"
 //!
@@ -27,65 +27,56 @@ use std::path::PathBuf;
 
 /// Top-level configuration structure
 #[derive(Deserialize, Debug)]
-pub(crate) struct Config {
+pub struct Config {
     /// Configuration for initramfs generation
-    pub(crate) initramfs: Initramfs,
+    pub initramfs: Initramfs,
     /// Configuration for microcode bundle generation
-    pub(crate) microcode: Option<Microcode>,
+    pub microcode: Option<Microcode>,
 }
 
 /// Initramfs generation configuration
 #[derive(Deserialize, Debug)]
-pub(crate) struct Initramfs {
+pub struct Initramfs {
     /// Where to find the init (script or binary) for the initramfs
-    pub(crate) init: PathBuf,
-    /// Kernel modules to add to the initramfs
-    pub(crate) module: Option<Vec<Module>>,
+    pub init: PathBuf,
     /// Binaries to add to the initramfs
-    pub(crate) bin: Option<Vec<Binary>>,
+    pub bin: Option<Vec<Binary>>,
     /// Libraries to add to the initramfs
-    pub(crate) lib: Option<Vec<Library>>,
+    pub lib: Option<Vec<Library>>,
     /// Filesystem trees to copy into the initramfs
-    pub(crate) tree: Option<Vec<Tree>>,
-}
-
-/// Configuration for a kernel module
-#[derive(Deserialize, Debug)]
-pub(crate) struct Module {
-    /// Name of the kernel module to copy
-    pub(crate) name: String,
+    pub tree: Option<Vec<Tree>>,
 }
 
 /// Configuration for an executable binary
 #[derive(Deserialize, Debug)]
-pub(crate) struct Binary {
+pub struct Binary {
     /// The path where the binary can be found
-    pub(crate) path: PathBuf,
+    pub path: PathBuf,
 }
 
 /// Configuration for a dynamic library
 #[derive(Deserialize, Debug)]
-pub(crate) struct Library {
+pub struct Library {
     /// The path where the library can be found
-    pub(crate) path: PathBuf,
+    pub path: PathBuf,
 }
 
 /// Microcode generation configuration
 #[derive(Deserialize, Debug)]
-pub(crate) struct Microcode {
+pub struct Microcode {
     /// The path to the AMD specific blobs
-    pub(crate) amd: Option<PathBuf>,
+    pub amd: Option<PathBuf>,
     /// The path to the Intel specific blobs
-    pub(crate) intel: Option<PathBuf>,
+    pub intel: Option<PathBuf>,
 }
 
 /// Configuration for a filesystem tree
 #[derive(Deserialize, Debug)]
-pub(crate) struct Tree {
-    /// The source of the tree to copy
-    pub(crate) source: PathBuf,
-    /// The destination to copy the tree to
-    pub(crate) dest: PathBuf,
+pub struct Tree {
+    /// The destination in the initramfs
+    pub path: PathBuf,
+    /// The list of files and directories to copy
+    pub copy: Vec<PathBuf>,
 }
 
 #[cfg(test)]
