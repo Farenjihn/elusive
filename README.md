@@ -29,3 +29,13 @@ I wrote this in my free time to help me customize a Gentoo system I use in attac
 For that reason, there is no support to add kernel modules in the initramfs. Since the original use case means having control over the kernel configuration, the assumption is users can configure their kernel and select the needed features as built-in.
 
 This is probably not useful if you do not want to write your own init script, or do something that is not supported by the likes of `mkinicpio`, `dracut` or other "batteries-included" initramfs generators.
+
+## Testing
+
+A simple script using `qemu` is included in the repository for quick testing. For now it hardcodes the path to the kernel on Arch Linux but this can be changed if necessary. To use it simply run:
+
+```sh
+./qemu.sh
+```
+
+Once in the VM, you can shut it down using `poweroff -f`.
