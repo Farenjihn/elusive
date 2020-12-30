@@ -77,16 +77,16 @@ fn walk_linkmap(lib: &str, resolved: &mut HashSet<PathBuf>) -> Result<()> {
     unsafe {
         let mut linkmap = linkmap.assume_init();
 
-        // Walk back to the beginning of the link map
+        // walk back to the beginning of the link map
         while !(*linkmap).l_prev.is_null() {
             linkmap = (*linkmap).l_prev as *mut link_map;
         }
 
-        // Skip first entry in linkmap since its name is empty
-        // Next entry is also skipped since it is the vDSO
+        // skip first entry in linkmap since its name is empty
+        // next entry is also skipped since it is the vDSO
         linkmap = (*linkmap).l_next as *mut link_map;
 
-        // Walk through the link map and add entries
+        // walk through the link map and add entries
         while !(*linkmap).l_next.is_null() {
             linkmap = (*linkmap).l_next as *mut link_map;
             names.push(CStr::from_ptr((*linkmap).l_name));
