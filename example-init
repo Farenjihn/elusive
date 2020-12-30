@@ -1,7 +1,9 @@
-#!/bin/busybox ash
+#!/bin/busybox sh
 
 /bin/busybox --install -s /bin
 
-echo "~~ Welcome to your initramfs ~~"
+cat /etc/hello.txt
 
-ash
+PS1="root@initramfs \\$ " sh
+
+poweroff -f
