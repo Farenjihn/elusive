@@ -8,6 +8,7 @@ use crate::config::Microcode;
 use crate::newc::{Archive, Entry, EntryBuilder};
 
 use anyhow::Result;
+use log::info;
 use std::fs;
 use std::path::Path;
 
@@ -24,6 +25,7 @@ const DEFAULT_FILE_MODE: u32 = 0o100000 + 0o755;
 
 /// Builder pattern for microcode bundle generation
 pub struct MicrocodeBundle {
+    /// Entries for the cpio archive
     entries: Vec<Entry>,
 }
 
@@ -31,6 +33,8 @@ impl MicrocodeBundle {
     /// Create a new bundle
     pub fn new() -> Result<Self> {
         let mut entries = Vec::new();
+
+        info!("Adding default microcode directory: {}", UCODE_TREE);
         mkdir_all(&mut entries, Path::new(UCODE_TREE));
 
         Ok(MicrocodeBundle { entries })
@@ -53,6 +57,8 @@ impl MicrocodeBundle {
 
     /// Bundle amd microcode from the provided path
     pub fn add_amd_ucode(&mut self, path: &Path) -> Result<()> {
+        info!("Bundling AMD microcode");
+
         let name = Path::new(UCODE_TREE).join(AMD_UCODE_NAME);
         let data = bundle_ucode(&path)?;
 
@@ -67,6 +73,8 @@ impl MicrocodeBundle {
 
     /// Bundle intel microcode from the provided path
     pub fn add_intel_ucode(&mut self, path: &Path) -> Result<()> {
+        info!("Bundling Intel microcode");
+
         let name = Path::new(UCODE_TREE).join(INTEL_UCODE_NAME);
         let data = bundle_ucode(&path)?;
 

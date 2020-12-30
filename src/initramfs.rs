@@ -34,6 +34,7 @@ const DEFAULT_SYMLINK_MODE: u32 = 0o120000;
 
 /// Builder pattern for initramfs generation
 pub struct Initramfs {
+    /// Entries for the cpio archive
     entries: Vec<Entry>,
     /// Cache of processed paths to avoid duplicates
     cache: HashSet<PathBuf>,
