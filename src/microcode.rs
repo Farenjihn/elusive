@@ -25,6 +25,10 @@ const DEFAULT_FILE_MODE: u32 = 0o100000 + 0o755;
 
 /// Builder pattern for microcode bundle generation
 pub struct MicrocodeBundle {
+    /// Flag to check if amd ucode was already added
+    amd: bool,
+    /// Flag to check if intel ucode was already added
+    intel: bool,
     /// Entries for the cpio archive
     entries: Vec<Entry>,
 }
@@ -37,7 +41,11 @@ impl MicrocodeBundle {
         info!("Adding default microcode directory: {}", UCODE_TREE);
         mkdir_all(&mut entries, Path::new(UCODE_TREE));
 
-        Ok(MicrocodeBundle { entries })
+        Ok(MicrocodeBundle {
+            amd: false,
+            intel: false,
+            entries,
+        })
     }
 
     /// Create a new bundle from a configuration
@@ -57,6 +65,10 @@ impl MicrocodeBundle {
 
     /// Bundle amd microcode from the provided path
     pub fn add_amd_ucode(&mut self, path: &Path) -> Result<()> {
+        if self.amd {
+            return Ok(());
+        }
+
         info!("Bundling AMD microcode");
 
         let name = Path::new(UCODE_TREE).join(AMD_UCODE_NAME);
@@ -67,12 +79,17 @@ impl MicrocodeBundle {
             .build();
 
         self.entries.push(entry);
+        self.amd = true;
 
         Ok(())
     }
 
     /// Bundle intel microcode from the provided path
     pub fn add_intel_ucode(&mut self, path: &Path) -> Result<()> {
+        if self.intel {
+            return Ok(());
+        }
+
         info!("Bundling Intel microcode");
 
         let name = Path::new(UCODE_TREE).join(INTEL_UCODE_NAME);
@@ -83,6 +100,7 @@ impl MicrocodeBundle {
             .build();
 
         self.entries.push(entry);
+        self.intel = true;
 
         Ok(())
     }
