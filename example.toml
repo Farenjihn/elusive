@@ -1,22 +1,27 @@
+# declare the initramfs configuration and specify
+# which file will be run as PID 1
 [initramfs]
 init = "example-init"
 
+# specify binaries to include
 [[initramfs.bin]]
 path = "/bin/busybox"
 
 [[initramfs.bin]]
 path = "/sbin/cryptsetup"
 
+# specify libraries to include
 [[initramfs.lib]]
 path = "/lib64/ld-linux-x86-64.so.2"
 
+# use trees to copy files in the initramfs
 [[initramfs.tree]]
 path = "/etc"
 copy = [
     "example/motd",
 ]
 
-# Trees can also copy directory contents as well as files
+# trees can also copy directory contents as well as files
 [[initramfs.tree]]
 path = "/lib/udev/rules.d"
 copy = [
@@ -24,5 +29,7 @@ copy = [
     "/lib/udev/rules.d",
 ]
 
+# declare the microcode archive configuration
+# and point the bundler to the proper path
 [microcode]
 amd = "/lib/firmware/amd-ucode"
