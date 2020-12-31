@@ -4,7 +4,7 @@
 //! cpio archive to use as an initramfs.
 
 use crate::config;
-use crate::depend::Resolver;
+use crate::depend;
 use crate::newc::{Archive, Entry, EntryBuilder};
 
 use anyhow::{bail, Result};
@@ -78,30 +78,16 @@ impl Initramfs {
         if let Some(binaries) = config.bin {
             let paths: Vec<PathBuf> = binaries.into_iter().map(|bin| bin.path).collect();
 
-            let resolver = Resolver::new(&paths);
-            let dependencies = resolver.resolve()?;
-
             for path in paths {
                 initramfs.add_binary(&path)?;
-            }
-
-            for dependency in dependencies {
-                initramfs.add_library(&dependency)?;
             }
         }
 
         if let Some(libraries) = config.lib {
             let paths: Vec<PathBuf> = libraries.into_iter().map(|lib| lib.path).collect();
 
-            let resolver = Resolver::new(&paths);
-            let dependencies = resolver.resolve()?;
-
             for path in paths {
                 initramfs.add_library(&path)?;
-            }
-
-            for dependency in dependencies {
-                initramfs.add_library(&dependency)?;
             }
         }
 
@@ -149,6 +135,10 @@ impl Initramfs {
         info!("Adding binary: {}", path.display());
         self.add_elf(path, Path::new("/usr/bin"))?;
 
+        for dependency in depend::resolve(path)? {
+            self.add_library(&dependency)?;
+        }
+
         Ok(())
     }
 
@@ -160,6 +150,10 @@ impl Initramfs {
 
         info!("Adding library: {}", path.display());
         self.add_elf(path, Path::new("/usr/lib"))?;
+
+        for dependency in depend::resolve(path)? {
+            self.add_library(&dependency)?;
+        }
 
         Ok(())
     }
@@ -319,16 +313,7 @@ mod tests {
         let ls = PathBuf::from("/bin/ls");
         if ls.exists() {
             config.bin = Some(vec![config::Binary { path: ls.clone() }]);
-
-            let list = &[ls.clone()];
-            let resolver = Resolver::new(list);
-            let libraries = resolver.resolve()?;
-
             initramfs.add_binary(&ls)?;
-
-            for lib in libraries {
-                initramfs.add_library(&lib)?;
-            }
         }
 
         assert_eq!(initramfs.build(), Initramfs::from_config(config)?.build());
