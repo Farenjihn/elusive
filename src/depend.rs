@@ -1,50 +1,33 @@
 use anyhow::{bail, Result};
 use goblin::elf::Elf;
 use log::error;
-use std::collections::HashSet;
 use std::ffi::{CStr, CString, OsStr};
 use std::fs;
 use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-pub(crate) struct Resolver<'a> {
-    paths: &'a [PathBuf],
-}
+pub fn resolve(path: &Path) -> Result<Vec<PathBuf>> {
+    let mut resolved = Vec::new();
 
-impl<'a> Resolver<'a> {
-    pub(crate) fn new(paths: &'a [PathBuf]) -> Self {
-        Resolver { paths }
-    }
+    let data = fs::read(path)?;
 
-    pub(crate) fn resolve(&self) -> Result<Vec<PathBuf>> {
-        let mut resolved = HashSet::new();
-
-        for path in self.paths {
-            let data = fs::read(path)?;
-
-            let elf = match Elf::parse(&data) {
-                Ok(elf) => elf,
-                Err(err) => {
-                    error!("Failed to parse binary: {}", path.display());
-                    bail!("only ELF binaries are supported: {}", err);
-                }
-            };
-
-            for lib in elf.libraries {
-                walk_linkmap(lib, &mut resolved)?;
-            }
+    let elf = match Elf::parse(&data) {
+        Ok(elf) => elf,
+        Err(err) => {
+            error!("Failed to parse binary: {}", path.display());
+            bail!("only ELF binaries are supported: {}", err);
         }
+    };
 
-        // sort dependencies to try and make archives at least somewhat reproducible
-        let mut resolved: Vec<PathBuf> = resolved.into_iter().collect();
-        resolved.sort();
-
-        Ok(resolved)
+    for lib in elf.libraries {
+        walk_linkmap(lib, &mut resolved)?;
     }
+
+    Ok(resolved)
 }
 
-fn walk_linkmap(lib: &str, resolved: &mut HashSet<PathBuf>) -> Result<()> {
+fn walk_linkmap(lib: &str, resolved: &mut Vec<PathBuf>) -> Result<()> {
     let name = CString::new(lib)?;
     let mut linkmap = MaybeUninit::<*mut link_map>::uninit();
 
@@ -95,7 +78,7 @@ fn walk_linkmap(lib: &str, resolved: &mut HashSet<PathBuf>) -> Result<()> {
 
     for name in names {
         let path = PathBuf::from(OsStr::from_bytes(name.to_bytes()));
-        resolved.insert(path);
+        resolved.push(path);
     }
 
     let ret = unsafe { libc::dlclose(handle) };
@@ -126,14 +109,10 @@ mod tests {
         let ls = PathBuf::from("/bin/ls");
 
         if ls.exists() {
-            let paths = [ls];
-
-            let resolver = Resolver::new(&paths);
-            let libraries = resolver.resolve()?;
-
+            let dependencies = resolve(&ls)?;
             let mut found_libc = false;
 
-            for lib in libraries {
+            for lib in dependencies {
                 if lib
                     .file_name()
                     .expect("library path should have filename")
