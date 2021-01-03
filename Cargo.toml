@@ -19,10 +19,10 @@ toml = "0.5.8"
 walkdir = "2.3.1"
 zstd = "0.6.0"
 
-[dependencies.goblin]
-version = "0.2.3"
-default_features = false
-features = ["std", "elf32", "elf64", "endian_fd"]
+[dependencies.object]
+version = "0.23.0"
+default-features = false
+features = ["elf", "read_core", "std"]
 
 [dependencies.serde]
 version = "1.0.118"
