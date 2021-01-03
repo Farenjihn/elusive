@@ -1,34 +1,102 @@
 use anyhow::{bail, Result};
-use goblin::elf::Elf;
 use log::error;
-use std::ffi::{CStr, CString, OsStr};
+use object::elf::PT_DYNAMIC;
+use object::elf::{FileHeader32, FileHeader64};
+use object::elf::{DT_NEEDED, DT_STRSZ, DT_STRTAB};
+use object::pod::Bytes;
+use object::read::elf::{Dyn, FileHeader, ProgramHeader};
+use object::read::FileKind;
+use object::{Endianness, StringTable};
+use std::convert::TryInto;
+use std::ffi::{CStr, CString, OsStr, OsString};
 use std::fs;
 use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 pub fn resolve(path: &Path) -> Result<Vec<PathBuf>> {
-    let mut resolved = Vec::new();
-
     let data = fs::read(path)?;
 
-    let elf = match Elf::parse(&data) {
-        Ok(elf) => elf,
-        Err(err) => {
-            error!("Failed to parse binary: {}", path.display());
-            bail!("only ELF binaries are supported: {}", err);
-        }
-    };
+    let kind = FileKind::parse(&data)?;
+    let bytes = Bytes(&data);
 
-    for lib in elf.libraries {
-        walk_linkmap(lib, &mut resolved)?;
+    let needed = match kind {
+        FileKind::Elf32 => {
+            let elf = FileHeader32::<Endianness>::parse(bytes)?;
+            elf_needed(elf, bytes)
+        }
+        FileKind::Elf64 => {
+            let elf = FileHeader64::<Endianness>::parse(bytes)?;
+            elf_needed(elf, bytes)
+        }
+        _ => {
+            error!("Failed to parse binary");
+            bail!("only elf files are supported");
+        }
+    }?;
+
+    let mut resolved = Vec::new();
+
+    for lib in needed {
+        walk_linkmap(&lib, &mut resolved)?;
     }
 
     Ok(resolved)
 }
 
-fn walk_linkmap(lib: &str, resolved: &mut Vec<PathBuf>) -> Result<()> {
-    let name = CString::new(lib)?;
+fn elf_needed<T>(elf: &T, data: Bytes) -> Result<Vec<OsString>>
+where
+    T: FileHeader<Endian = Endianness>,
+{
+    let endian = elf.endian()?;
+    let headers = elf.program_headers(endian, data)?;
+
+    let mut strtab = 0;
+    let mut strsz = 0;
+
+    let mut offsets = Vec::new();
+
+    for header in headers {
+        if header.p_type(endian) == PT_DYNAMIC {
+            if let Some(dynamic) = header.dynamic(endian, data)? {
+                for entry in dynamic {
+                    let d_tag = entry.d_tag(endian).into();
+
+                    if d_tag == DT_STRTAB.into() {
+                        strtab = entry.d_val(endian).into();
+                    } else if d_tag == DT_STRSZ.into() {
+                        strsz = entry.d_val(endian).into();
+                    } else if d_tag == DT_NEEDED.into() {
+                        offsets.push(entry.d_val(endian).into());
+                    }
+                }
+            }
+        }
+    }
+
+    let mut needed = Vec::new();
+
+    for header in headers {
+        if let Ok(Some(data)) = header.data_range(endian, data, strtab, strsz) {
+            let dynstr = StringTable::new(data);
+
+            for offset in offsets {
+                let offset = offset.try_into()?;
+                let name = dynstr.get(offset).expect("offset exists in string table");
+                let path = OsStr::from_bytes(name).to_os_string();
+
+                needed.push(path);
+            }
+
+            break;
+        }
+    }
+
+    Ok(needed)
+}
+
+fn walk_linkmap(lib: &OsStr, resolved: &mut Vec<PathBuf>) -> Result<()> {
+    let name = CString::new(lib.as_bytes())?;
     let mut linkmap = MaybeUninit::<*mut link_map>::uninit();
 
     let handle = unsafe { libc::dlopen(name.as_ptr(), libc::RTLD_LAZY) };
@@ -39,7 +107,7 @@ fn walk_linkmap(lib: &str, resolved: &mut Vec<PathBuf>) -> Result<()> {
                 .expect("error should be valid utf8")
         };
 
-        error!("Failed to open handle to dynamic dependency for {}", lib);
+        error!("Failed to open handle to dynamic dependency for {:?}", lib);
         bail!("dlopen failed: {}", error);
     }
 
@@ -52,7 +120,7 @@ fn walk_linkmap(lib: &str, resolved: &mut Vec<PathBuf>) -> Result<()> {
     };
 
     if ret < 0 {
-        error!("Failed to get path to dynamic dependency for {}", lib);
+        error!("Failed to get path to dynamic dependency for {:?}", lib);
         bail!("dlinfo failed");
     }
 
@@ -83,7 +151,7 @@ fn walk_linkmap(lib: &str, resolved: &mut Vec<PathBuf>) -> Result<()> {
 
     let ret = unsafe { libc::dlclose(handle) };
     if ret < 0 {
-        error!("Failed to close handle to dynamic dependency for {}", lib);
+        error!("Failed to close handle to dynamic dependency for {:?}", lib);
         bail!("dlclose failed");
     }
 
