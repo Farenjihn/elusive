@@ -299,25 +299,51 @@ mod tests {
 
     #[test]
     fn test_initramfs() -> Result<()> {
+        let mut bin = vec![];
+        let mut lib = vec![];
+        let mut tree = vec![];
+
         let mut initramfs = Initramfs::new()?;
-
-        let mut config = config::Initramfs {
-            init: PathBuf::from("/sbin/init"),
-            bin: None,
-            lib: None,
-            tree: None,
-        };
-
         initramfs.add_init(Path::new("/sbin/init"))?;
 
         let ls = PathBuf::from("/bin/ls");
         if ls.exists() {
-            config.bin = Some(vec![config::Binary { path: ls.clone() }]);
             initramfs.add_binary(&ls)?;
+            bin.push(config::Binary { path: ls });
         }
 
-        assert_eq!(initramfs.build(), Initramfs::from_config(config)?.build());
+        let libc = PathBuf::from("/lib/libc.so.6");
+        if libc.exists() {
+            initramfs.add_library(&libc)?;
+            lib.push(config::Library { path: libc });
+        }
 
+        let hosts = PathBuf::from("/etc/hosts");
+        if hosts.exists() {
+            initramfs.add_tree(&[hosts.clone()], Path::new("/etc"))?;
+            tree.push(config::Tree {
+                path: PathBuf::from("/etc"),
+                copy: vec![hosts],
+            });
+        }
+
+        let udev = PathBuf::from("/lib/udev/rules.d");
+        if udev.exists() {
+            initramfs.add_tree(&[udev.clone()], Path::new("/lib/udev/rules.d"))?;
+            tree.push(config::Tree {
+                path: PathBuf::from("/lib/udev/rules.d"),
+                copy: vec![udev],
+            });
+        }
+
+        let config = config::Initramfs {
+            init: PathBuf::from("/sbin/init"),
+            bin: if bin.is_empty() { None } else { Some(bin) },
+            lib: if lib.is_empty() { None } else { Some(lib) },
+            tree: if tree.is_empty() { None } else { Some(tree) },
+        };
+
+        assert_eq!(initramfs.build(), Initramfs::from_config(config)?.build());
         Ok(())
     }
 }
