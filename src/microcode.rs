@@ -139,3 +139,23 @@ fn bundle_ucode(dir: &Path) -> Result<Vec<u8>> {
 
     Ok(data)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_microcode_bundle() -> Result<()> {
+        let mut bundle = MicrocodeBundle::new()?;
+        let amd = PathBuf::from("/lib/firmware/amd-ucode");
+
+        if amd.exists() {
+            bundle.add_amd_ucode(&amd)?;
+        }
+
+        bundle.build();
+
+        Ok(())
+    }
+}
