@@ -37,8 +37,10 @@ pub struct Config {
 /// Initramfs generation configuration
 #[derive(Deserialize, Debug)]
 pub struct Initramfs {
-    /// Where to find the init (script or binary) for the initramfs
+    /// Where to find the init script for the initramfs
     pub init: PathBuf,
+    /// Where to find the optional shutdown script for the initramfs
+    pub shutdown: Option<PathBuf>,
     /// Binaries to add to the initramfs
     pub bin: Option<Vec<Binary>>,
     /// Libraries to add to the initramfs

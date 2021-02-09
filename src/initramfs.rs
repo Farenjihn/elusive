@@ -75,6 +75,10 @@ impl Initramfs {
         let mut initramfs = Initramfs::new()?;
         initramfs.add_init(&config.init)?;
 
+        if let Some(shutdown) = &config.shutdown {
+            initramfs.add_shutdown(shutdown)?;
+        }
+
         if let Some(binaries) = config.bin {
             let paths: Vec<PathBuf> = binaries.into_iter().map(|bin| bin.path).collect();
 
@@ -100,28 +104,26 @@ impl Initramfs {
         Ok(initramfs)
     }
 
-    /// Add the init (script or binary) from the provided path to the initramfs
+    /// Add the init script from the provided path to the initramfs
     pub fn add_init(&mut self, path: &Path) -> Result<()> {
         if self.cache.contains(path) {
             return Ok(());
         }
 
-        info!("Adding init script: {}", path.display());
+        info!("Adding init entrypoint: {}", path.display());
+        self.add_entrypoint("init", path)?;
 
-        if !path.exists() {
-            error!("Failed to find init: {}", path.display());
-            bail!("init not found: {}", path.display());
+        Ok(())
+    }
+
+    /// Add the shutdown script, similar to init
+    pub fn add_shutdown(&mut self, path: &Path) -> Result<()> {
+        if self.cache.contains(path) {
+            return Ok(());
         }
 
-        let metadata = fs::metadata(&path)?;
-        let data = fs::read(&path)?;
-
-        let entry = EntryBuilder::file("/init", data)
-            .with_metadata(metadata)
-            .build();
-
-        self.cache.insert(path.to_path_buf());
-        self.entries.push(entry);
+        info!("Adding shutdown entrypoint: {}", path.display());
+        self.add_entrypoint("init", path)?;
 
         Ok(())
     }
@@ -244,6 +246,25 @@ impl Initramfs {
 }
 
 impl Initramfs {
+    fn add_entrypoint(&mut self, name: &str, path: &Path) -> Result<()> {
+        if !path.exists() {
+            error!("Failed to find {}: {}", name, path.display());
+            bail!("{} not found: {}", name, path.display());
+        }
+
+        let metadata = fs::metadata(&path)?;
+        let data = fs::read(&path)?;
+
+        let entry = EntryBuilder::file(format!("/{}", name), data)
+            .with_metadata(metadata)
+            .build();
+
+        self.cache.insert(path.to_path_buf());
+        self.entries.push(entry);
+
+        Ok(())
+    }
+
     /// Adds an elf binary to the initramfs, also adding its dynamic dependencies
     fn add_elf(&mut self, path: &Path, dest: &Path) -> Result<()> {
         if !path.exists() {
@@ -338,12 +359,14 @@ mod tests {
 
         let config = config::Initramfs {
             init: PathBuf::from("/sbin/init"),
+            shutdown: None,
             bin: if bin.is_empty() { None } else { Some(bin) },
             lib: if lib.is_empty() { None } else { Some(lib) },
             tree: if tree.is_empty() { None } else { Some(tree) },
         };
 
         assert_eq!(initramfs.build(), Initramfs::from_config(config)?.build());
+
         Ok(())
     }
 }
