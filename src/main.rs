@@ -76,8 +76,8 @@ fn main() -> Result<()> {
     let data = fs::read(config_path)?;
     let config: Config = toml::from_slice(&data)?;
 
-    // use gzip by default
-    let encoder = match matches.value_of("encoder").unwrap_or("gzip") {
+    // use zstd by default
+    let encoder = match matches.value_of("encoder").unwrap_or("zstd") {
         "none" => Encoder::None,
         "gzip" => Encoder::Gzip,
         "zstd" => Encoder::Zstd,
