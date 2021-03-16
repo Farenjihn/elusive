@@ -2,6 +2,9 @@
 name = "elusive"
 version = "0.5.0"
 authors = ["Valentin Finini <farenjihn@gmail.com>"]
+description = "A custom initramfs generator"
+license = "GPL-3.0"
+repository = "https://github.com/Farenjihn/elusive"
 edition = "2018"
 
 [[bin]]

@@ -28,11 +28,11 @@ impl Encoder {
             Encoder::None => return Ok(data.to_vec()),
             Encoder::Gzip => {
                 let mut gzenc = GzEncoder::new(&mut buf, Compression::default());
-                gzenc.write_all(&data)?;
+                gzenc.write_all(data)?;
             }
             Encoder::Zstd => {
                 let mut zstdenc = ZstdEncoder::new(&mut buf, 3)?;
-                zstdenc.write_all(&data)?;
+                zstdenc.write_all(data)?;
                 zstdenc.finish()?;
             }
         }

@@ -29,8 +29,8 @@ const ROOT_SYMLINKS: [(&str, &str); 6] = [
     ("/usr/sbin", "bin"),
 ];
 
-const DEFAULT_DIR_MODE: u32 = 0o040000 + 0o755;
-const DEFAULT_SYMLINK_MODE: u32 = 0o120000;
+const DEFAULT_DIR_MODE: u32 = 0o040_000 + 0o755;
+const DEFAULT_SYMLINK_MODE: u32 = 0o120_000;
 
 /// Builder pattern for initramfs generation
 pub struct Initramfs {
@@ -165,7 +165,7 @@ impl Initramfs {
     pub fn add_tree(&mut self, copy: &[PathBuf], dest: &Path) -> Result<()> {
         info!("Copying filesystem tree into: {}", dest.display());
 
-        self.mkdir_all(&dest);
+        self.mkdir_all(dest);
 
         for tree in copy {
             if !tree.exists() {
@@ -207,7 +207,7 @@ impl Initramfs {
                         EntryBuilder::special_file(&name)
                     };
 
-                    let entry = builder.with_metadata(metadata).build();
+                    let entry = builder.with_metadata(&metadata).build();
 
                     self.cache.insert(name);
                     self.entries.push(entry);
@@ -229,7 +229,7 @@ impl Initramfs {
                     EntryBuilder::special_file(&name)
                 };
 
-                let entry = builder.with_metadata(metadata).build();
+                let entry = builder.with_metadata(&metadata).build();
 
                 self.cache.insert(name);
                 self.entries.push(entry);
@@ -256,7 +256,7 @@ impl Initramfs {
         let data = fs::read(&path)?;
 
         let entry = EntryBuilder::file(format!("/{}", name), data)
-            .with_metadata(metadata)
+            .with_metadata(&metadata)
             .build();
 
         self.cache.insert(path.to_path_buf());
@@ -285,7 +285,7 @@ impl Initramfs {
         let data = fs::read(&path)?;
 
         let entry = EntryBuilder::file(name, data)
-            .with_metadata(metadata)
+            .with_metadata(&metadata)
             .build();
 
         self.cache.insert(path.to_path_buf());

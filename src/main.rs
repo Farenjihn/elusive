@@ -76,13 +76,12 @@ fn main() -> Result<()> {
     let data = fs::read(config_path)?;
     let config: Config = toml::from_slice(&data)?;
 
-    let encoder = match matches.value_of("encoder") {
-        Some("none") => Encoder::None,
-        Some("gzip") => Encoder::Gzip,
-        Some("zstd") => Encoder::Zstd,
-        Some(other) => bail!("unknown encoder: {}", other),
-        // use gzip by default
-        None => Encoder::Gzip,
+    // use gzip by default
+    let encoder = match matches.value_of("encoder").unwrap_or("gzip") {
+        "none" => Encoder::None,
+        "gzip" => Encoder::Gzip,
+        "zstd" => Encoder::Zstd,
+        other => bail!("unknown encoder: {}", other),
     };
 
     match matches.subcommand() {

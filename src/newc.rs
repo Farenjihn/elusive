@@ -204,7 +204,7 @@ impl Entry {
         pad_buf(buf);
 
         if let Some(data) = &self.data {
-            buf.write_all(&data)?;
+            buf.write_all(data)?;
             pad_buf(buf);
         }
 
@@ -268,7 +268,7 @@ impl EntryBuilder {
     }
 
     /// Add the provided metadata to the entry
-    pub fn with_metadata(self, metadata: Metadata) -> Self {
+    pub fn with_metadata(self, metadata: &Metadata) -> Self {
         let rdev = metadata.rdev();
 
         self.mode(metadata.mode())
@@ -283,25 +283,25 @@ impl EntryBuilder {
     }
 
     /// Set the mode for the entry
-    pub fn mode(mut self, mode: u32) -> Self {
+    pub const fn mode(mut self, mode: u32) -> Self {
         self.entry.mode = mode;
         self
     }
 
     /// Set the modification time for the entry
-    pub fn mtime(mut self, mtime: u64) -> Self {
+    pub const fn mtime(mut self, mtime: u64) -> Self {
         self.entry.mtime = mtime;
         self
     }
 
     /// Set the major rdev number for the entry
-    pub fn rdev_major(mut self, rdev_major: u64) -> Self {
+    pub const fn rdev_major(mut self, rdev_major: u64) -> Self {
         self.entry.rdev_major = rdev_major;
         self
     }
 
     /// Set the minor rdev number for the entry
-    pub fn rdev_minor(mut self, rdev_minor: u64) -> Self {
+    pub const fn rdev_minor(mut self, rdev_minor: u64) -> Self {
         self.entry.rdev_minor = rdev_minor;
         self
     }
@@ -322,13 +322,13 @@ pub fn pad_buf(buf: &mut Vec<u8>) {
 }
 
 /// Shamelessly taken from the `nix` crate, thanks !
-pub fn major(dev: u64) -> u64 {
-    ((dev >> 32) & 0xfffff000) | ((dev >> 8) & 0x00000fff)
+pub const fn major(dev: u64) -> u64 {
+    ((dev >> 32) & 0xffff_f000) | ((dev >> 8) & 0x0000_0fff)
 }
 
 /// Shamelessly taken from the `nix` crate, thanks !
-pub fn minor(dev: u64) -> u64 {
-    ((dev >> 12) & 0xffffff00) | ((dev) & 0x000000ff)
+pub const fn minor(dev: u64) -> u64 {
+    ((dev >> 12) & 0xffff_ff00) | ((dev) & 0x0000_00ff)
 }
 
 #[cfg(test)]

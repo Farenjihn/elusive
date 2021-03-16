@@ -20,8 +20,8 @@ const AMD_UCODE_NAME: &str = "AuthenticAMD.bin";
 /// Name of the microcode blob for Intel
 const INTEL_UCODE_NAME: &str = "GenuineIntel.bin";
 
-const DEFAULT_DIR_MODE: u32 = 0o040000 + 0o755;
-const DEFAULT_FILE_MODE: u32 = 0o100000 + 0o755;
+const DEFAULT_DIR_MODE: u32 = 0o040_000 + 0o755;
+const DEFAULT_FILE_MODE: u32 = 0o100_000 + 0o755;
 
 /// Builder pattern for microcode bundle generation
 pub struct MicrocodeBundle {
@@ -72,7 +72,7 @@ impl MicrocodeBundle {
         info!("Bundling AMD microcode");
 
         let name = Path::new(UCODE_TREE).join(AMD_UCODE_NAME);
-        let data = bundle_ucode(&path)?;
+        let data = bundle_ucode(path)?;
 
         let entry = EntryBuilder::file(name, data)
             .mode(DEFAULT_FILE_MODE)
@@ -93,7 +93,7 @@ impl MicrocodeBundle {
         info!("Bundling Intel microcode");
 
         let name = Path::new(UCODE_TREE).join(INTEL_UCODE_NAME);
-        let data = bundle_ucode(&path)?;
+        let data = bundle_ucode(path)?;
 
         let entry = EntryBuilder::file(name, data)
             .mode(DEFAULT_FILE_MODE)
