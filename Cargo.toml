@@ -12,14 +12,14 @@ name = "elusive"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.38"
+anyhow = "1.0.40"
 clap = "2.33.3"
 env_logger = "0.8.3"
 flate2 = "1.0.20"
-libc = "0.2.89"
+libc = "0.2.92"
 log = "0.4.14"
 toml = "0.5.8"
-walkdir = "2.3.1"
+walkdir = "2.3.2"
 zstd = "0.6.1"
 
 [dependencies.object]
@@ -28,5 +28,5 @@ default-features = false
 features = ["elf", "read_core", "std"]
 
 [dependencies.serde]
-version = "1.0.124"
+version = "1.0.125"
 features = ["derive"]
