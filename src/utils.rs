@@ -1,6 +1,7 @@
 //! Various utilities
 
-use anyhow::Result;
+use anyhow::{bail, Result};
+use log::error;
 use std::ffi::OsStr;
 use std::io::{Read, Write};
 use std::path::Path;
@@ -19,6 +20,14 @@ where
 
         Ok(buf)
     } else {
+        if !path.exists() {
+            error!("Input file not found: {}", path.display());
+            bail!(io::Error::new(
+                io::ErrorKind::NotFound,
+                path.to_string_lossy()
+            ));
+        }
+
         let data = fs::read(path)?;
         Ok(data)
     }
@@ -34,6 +43,14 @@ where
     if path == OsStr::new("-") {
         io::stdout().write_all(data)?;
     } else {
+        if !path.exists() {
+            error!("Output file not found: {}", path.display());
+            bail!(io::Error::new(
+                io::ErrorKind::NotFound,
+                path.to_string_lossy()
+            ));
+        }
+
         fs::write(path, data)?;
     }
 
