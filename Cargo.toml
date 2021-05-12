@@ -16,11 +16,11 @@ anyhow = "1.0.40"
 clap = "2.33.3"
 env_logger = "0.8.3"
 flate2 = "1.0.20"
-libc = "0.2.92"
+libc = "0.2.94"
 log = "0.4.14"
 toml = "0.5.8"
 walkdir = "2.3.2"
-zstd = "0.6.1"
+zstd = "0.8.0"
 
 [dependencies.object]
 version = "0.23.0"
