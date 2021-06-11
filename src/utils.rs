@@ -1,6 +1,6 @@
 //! Various utilities
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use log::error;
 use std::ffi::OsStr;
 use std::io::{Read, Write};
@@ -43,7 +43,9 @@ where
     if path == OsStr::new("-") {
         io::stdout().write_all(data)?;
     } else {
-        if !path.exists() {
+        let parent = path.parent().context("no parent directory")?;
+
+        if !parent.exists() {
             error!("Output file not found: {}", path.display());
             bail!(io::Error::new(
                 io::ErrorKind::NotFound,
