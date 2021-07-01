@@ -21,6 +21,7 @@ fn main() -> Result<()> {
     env_logger::init_from_env(env);
 
     let app = App::new("elusive")
+        .version(clap::crate_version!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg(
             Arg::with_name("config")
