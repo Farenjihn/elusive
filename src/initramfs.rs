@@ -123,7 +123,7 @@ impl Initramfs {
         }
 
         info!("Adding shutdown entrypoint: {}", path.display());
-        self.add_entrypoint("init", path)?;
+        self.add_entrypoint("shutdown", path)?;
 
         Ok(())
     }
