@@ -5,6 +5,7 @@
 //! load an initramfs.
 
 use anyhow::Result;
+use log::debug;
 use std::convert::TryInto;
 use std::ffi::CString;
 use std::fmt;
@@ -115,7 +116,10 @@ impl Deref for EntryData {
 
 impl fmt::Debug for EntryData {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("EntryData(<data>)")
+        f.write_fmt(format_args!(
+            "EntryData {{ data: <skipped> ({} bytes) }}",
+            self.data.len()
+        ))
     }
 }
 
@@ -180,6 +184,8 @@ impl Entry {
             Some(data) => data.len(),
             None => 0,
         };
+
+        debug!("Serializing entry: {:#?}", self,);
 
         // serialize the header for this entry
         let filename = self.name.into_bytes_with_nul()?;

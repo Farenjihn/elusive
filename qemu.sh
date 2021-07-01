@@ -1,8 +1,12 @@
 #!/bin/bash
 
+set -e
+
 TMP=$(mktemp -d /tmp/elusive.XXXXXXXXXX) || exit 1
 
 cargo build
+
+# export RUST_LOG=debug
 
 # build microcode archive
 target/debug/elusive microcode \
