@@ -5,7 +5,7 @@ use log::error;
 use std::ffi::OsStr;
 use std::io::{Read, Write};
 use std::path::Path;
-use std::{fs, io};
+use std::{env, fs, io};
 
 /// Allow reading from either a file or standard input
 pub fn read_input<P>(path: P) -> Result<Vec<u8>>
@@ -43,13 +43,20 @@ where
     if path == OsStr::new("-") {
         io::stdout().write_all(data)?;
     } else {
-        let parent = path.parent().context("no parent directory")?;
+        let absolute = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            env::current_dir()?.join(path)
+        };
+
+        let parent = absolute.parent().context("no parent directory")?;
 
         if !parent.exists() {
-            error!("Output file not found: {}", path.display());
+            error!("Directory does not exist: {}", parent.display());
+
             bail!(io::Error::new(
                 io::ErrorKind::NotFound,
-                path.to_string_lossy()
+                parent.to_string_lossy()
             ));
         }
 
