@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use log::error;
+use object::elf::FileHeader64;
 use object::elf::PT_DYNAMIC;
-use object::elf::{FileHeader32, FileHeader64};
 use object::elf::{DT_NEEDED, DT_STRSZ, DT_STRTAB};
 use object::read::elf::{Dyn, FileHeader, ProgramHeader};
 use object::read::FileKind;
@@ -20,17 +20,13 @@ pub fn resolve(path: &Path) -> Result<Vec<PathBuf>> {
     let kind = FileKind::parse(data)?;
 
     let needed = match kind {
-        FileKind::Elf32 => {
-            let elf = FileHeader32::<Endianness>::parse(data)?;
-            elf_needed(elf, data)
-        }
         FileKind::Elf64 => {
             let elf = FileHeader64::<Endianness>::parse(data)?;
             elf_needed(elf, data)
         }
         _ => {
             error!("Failed to parse binary");
-            bail!("only elf files are supported");
+            bail!("only 64bit elf files are supported");
         }
     }?;
 
