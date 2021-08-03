@@ -46,18 +46,29 @@ mod tests {
     use super::*;
     use crate::newc::EntryBuilder;
 
-    #[test]
-    fn test_encode() -> Result<()> {
-        let archive = Archive::new(vec![EntryBuilder::file(
+    fn dummy_archive() -> Archive {
+        Archive::new(vec![EntryBuilder::file(
             "/testfile",
             b"datadatadata".to_vec(),
         )
-        .build()]);
+        .build()])
+    }
 
+    #[test]
+    fn test_encode() -> Result<()> {
+        let archive = dummy_archive();
+        Encoder::None.encode_archive(archive)?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_encode_ext() -> Result<()> {
+        let archive = dummy_archive();
         let data = archive.into_bytes()?;
 
         let none_enc = Encoder::None;
-        let gzip_enc = Encoder::Zstd;
+        let gzip_enc = Encoder::Gzip;
         let zstd_enc = Encoder::Zstd;
 
         let none = none_enc.encode(&data)?;

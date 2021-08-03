@@ -168,6 +168,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_failure() {
+        let path = PathBuf::from("/dev/null");
+        assert!(resolve(&path).is_err());
+    }
+
+    #[test]
     fn test_resolver() -> Result<()> {
         let ls = PathBuf::from("/bin/ls");
 
