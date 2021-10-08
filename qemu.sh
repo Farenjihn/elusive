@@ -4,6 +4,11 @@ set -e
 
 TMP=$(mktemp -d /tmp/elusive.XXXXXXXXXX) || exit 1
 
+cleanup() {
+    rm -rf "${TMP}"
+}
+trap cleanup EXIT
+
 cargo build
 
 # export RUST_LOG=debug
@@ -32,5 +37,3 @@ qemu-system-x86_64 \
     -kernel /boot/vmlinuz-linux \
     -initrd "${TMP}/initramfs" \
     -append "console=ttyS0,115200"
-
-rm -rf "${TMP}"
