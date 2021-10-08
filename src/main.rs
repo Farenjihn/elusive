@@ -10,6 +10,7 @@ use env_logger::Env;
 use log::info;
 use log::warn;
 use std::fs;
+use std::io::{BufReader, BufWriter, Read, Write};
 
 /// Default path for the config file
 const CONFIG_PATH: &str = "/etc/elusive.toml";
@@ -94,7 +95,11 @@ fn main() -> Result<()> {
 
             if let Some(path) = ucode {
                 info!("Adding microcode bundle from: {}", path);
-                let ucode = fs::read(path)?;
+
+                let read = utils::file_or_stdin(path)?;
+                let mut ucode = Vec::new();
+                BufReader::new(read).read_to_end(&mut ucode)?;
+
                 data.extend(ucode);
             }
 
@@ -103,7 +108,8 @@ fn main() -> Result<()> {
             data.extend(encoded);
 
             info!("Writing initramfs to: {}", output);
-            utils::write_output(output, &data)?;
+            let write = utils::file_or_stdout(output)?;
+            BufWriter::new(write).write_all(&data)?;
         }
         ("microcode", Some(microcode)) => {
             let output = microcode.value_of("output").unwrap();
@@ -113,7 +119,8 @@ fn main() -> Result<()> {
                 let encoded = encoder.encode_archive(bundle.build())?;
 
                 info!("Writing microcode cpio to: {}", output);
-                utils::write_output(output, &encoded)?;
+                let write = utils::file_or_stdout(output)?;
+                BufWriter::new(write).write_all(&encoded)?;
             } else {
                 warn!("No configuration provided for microcode generation");
             }
