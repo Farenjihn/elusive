@@ -73,7 +73,7 @@ where
 
     for header in headers {
         if let Ok(Some(data)) = header.data_range(endian, data, strtab, strsz) {
-            let dynstr = StringTable::new(data);
+            let dynstr = StringTable::new(data, 0, data.len() as u64);
 
             for offset in offsets {
                 let offset = offset.try_into()?;
