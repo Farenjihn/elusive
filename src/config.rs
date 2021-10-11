@@ -47,6 +47,8 @@ pub struct Initramfs {
     pub lib: Option<Vec<Library>>,
     /// Filesystem trees to copy into the initramfs
     pub tree: Option<Vec<Tree>>,
+    /// Modules to include in the initramfs
+    pub module: Option<Vec<Module>>,
 }
 
 /// Configuration for an executable binary
@@ -79,6 +81,15 @@ pub struct Tree {
     pub path: PathBuf,
     /// The list of files and directories to copy
     pub copy: Vec<PathBuf>,
+}
+
+/// Configuration for a kernel module
+#[derive(Deserialize, Debug)]
+pub struct Module {
+    /// Name of the kernel module to include
+    pub name: Option<String>,
+    /// Path to the kernel module, useful for out of tree modules
+    pub path: Option<PathBuf>,
 }
 
 #[cfg(test)]
