@@ -10,6 +10,12 @@ path = "/bin/busybox"
 [[initramfs.bin]]
 path = "/sbin/cryptsetup"
 
+[[initramfs.bin]]
+path = "/sbin/depmod"
+
+[[initramfs.bin]]
+path = "/sbin/modprobe"
+
 # specify libraries to include
 [[initramfs.lib]]
 path = "/lib64/ld-linux-x86-64.so.2"
@@ -28,6 +34,23 @@ copy = [
     "/lib/udev/rules.d/10-dm.rules",
     "/lib/udev/rules.d",
 ]
+
+# modules can be included in the initramfs
+[[initramfs.module]]
+name = "tpm"
+# path = /path/to/out/of/tree/module
+
+[[initramfs.module]]
+name = "tpm_tis"
+
+[[initramfs.module]]
+name = "tpm_tis_core"
+
+[[initramfs.module]]
+name = "tpm_crb"
+
+[[initramfs.module]]
+name = "rng-core"
 
 # declare the microcode archive configuration
 # and point the bundler to the proper path
