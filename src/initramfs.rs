@@ -5,13 +5,15 @@
 
 use crate::config;
 use crate::depend;
+use crate::kmod::{Kmod, Module};
 use crate::newc::{Archive, Entry, EntryBuilder};
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use log::{error, info};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use walkdir::WalkDir;
 
 /// Default directories to include in the initramfs
@@ -98,6 +100,21 @@ impl Initramfs {
         if let Some(trees) = config.tree {
             for tree in trees {
                 initramfs.add_tree(&tree.copy, &tree.path)?;
+            }
+        }
+
+        if let Some(modules) = config.module {
+            let mut kmod = Kmod::new()?;
+            initramfs.mkdir_all(&kmod.dir().join("kernel"));
+
+            for module in modules {
+                if let Some(path) = module.path {
+                    initramfs.add_module_from_path(&mut kmod, &path)?;
+                } else if let Some(name) = module.name {
+                    initramfs.add_module_from_name(&mut kmod, &name)?;
+                } else {
+                    bail!("invalid kernel module configuration, one of 'name' or 'path' must be specified");
+                }
             }
         }
 
@@ -239,6 +256,26 @@ impl Initramfs {
         Ok(())
     }
 
+    /// Add a named kernel module to the initramfs
+    pub fn add_module_from_name(&mut self, kmod: &mut Kmod, name: &str) -> Result<()> {
+        let module = kmod.module_from_name(name)?;
+
+        info!("Adding module with name: {}", name);
+        self.add_module(kmod, module)?;
+
+        Ok(())
+    }
+
+    /// Add a kernel module to the initramfs from the provided path
+    pub fn add_module_from_path(&mut self, kmod: &mut Kmod, path: &Path) -> Result<()> {
+        let module = kmod.module_from_path(path)?;
+
+        info!("Adding module from path: {}", path.display());
+        self.add_module(kmod, module)?;
+
+        Ok(())
+    }
+
     /// Return an archive from this initramfs
     pub fn build(self) -> Archive {
         Archive::new(self.entries)
@@ -289,6 +326,29 @@ impl Initramfs {
             .build();
 
         self.cache.insert(path.to_path_buf());
+        self.entries.push(entry);
+
+        Ok(())
+    }
+
+    fn add_module(&mut self, kmod: &Kmod, module: Rc<Module>) -> Result<()> {
+        if self.cache.contains(module.path()) {
+            return Ok(());
+        }
+
+        let metadata = fs::metadata(module.path())?;
+        let data = fs::read(module.path())?;
+
+        let filename = module
+            .path()
+            .file_name()
+            .context("missing filename in module path")?;
+
+        let entry = EntryBuilder::file(kmod.dir().join("kernel").join(filename), data)
+            .with_metadata(&metadata)
+            .build();
+
+        self.cache.insert(module.path().to_path_buf());
         self.entries.push(entry);
 
         Ok(())
@@ -363,6 +423,7 @@ mod tests {
             bin: if bin.is_empty() { None } else { Some(bin) },
             lib: if lib.is_empty() { None } else { Some(lib) },
             tree: if tree.is_empty() { None } else { Some(tree) },
+            module: None,
         };
 
         assert_eq!(initramfs.build(), Initramfs::from_config(config)?.build());
