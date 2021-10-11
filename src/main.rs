@@ -11,6 +11,7 @@ use log::info;
 use log::warn;
 use std::fs;
 use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::Path;
 
 /// Default path for the config file
 const CONFIG_PATH: &str = "/etc/elusive.toml";
@@ -75,6 +76,10 @@ fn main() -> Result<()> {
     let matches = app.get_matches();
 
     let config_path = matches.value_of("config").unwrap_or(CONFIG_PATH);
+    if !Path::new(config_path).exists() {
+        bail!("configuration file does not exist: {}", config_path);
+    }
+
     let data = fs::read(config_path)?;
     let config: Config = toml::from_slice(&data)?;
 
