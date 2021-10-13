@@ -44,8 +44,8 @@ pub struct InitramfsBuilder {
 impl InitramfsBuilder {
     /// Create a new builder
     pub fn new() -> Result<Self> {
-        let mut cache = HashSet::new();
         let mut entries = Vec::new();
+        let mut cache = HashSet::new();
 
         for dir in &ROOT_DIRS {
             info!("Adding default directory: {}", dir);
@@ -105,7 +105,6 @@ impl InitramfsBuilder {
 
         if let Some(modules) = config.module {
             let mut kmod = Kmod::new()?;
-            builder.mkdir_all(&kmod.dir().join("kernel"));
 
             for module in modules {
                 if let Some(path) = module.path {
@@ -345,6 +344,7 @@ impl InitramfsBuilder {
 
     /// Add a module to the initramfs
     fn add_module(&mut self, kmod: &mut Kmod, module: Module) -> Result<()> {
+        self.mkdir_all(&kmod.dir().join("kernel"));
         let path = module.path()?;
 
         let metadata = fs::metadata(path)?;
@@ -416,25 +416,26 @@ mod tests {
         let mut bin = vec![];
         let mut lib = vec![];
         let mut tree = vec![];
+        let mut module = vec![];
 
-        let mut initramfs = InitramfsBuilder::new()?;
-        initramfs.add_init(Path::new("/sbin/init"))?;
+        let mut builder = InitramfsBuilder::new()?;
+        builder.add_init(Path::new("/sbin/init"))?;
 
         let ls = PathBuf::from("/bin/ls");
         if ls.exists() {
-            initramfs.add_binary(&ls)?;
+            builder.add_binary(&ls)?;
             bin.push(config::Binary { path: ls });
         }
 
         let libc = PathBuf::from("/lib/libc.so.6");
         if libc.exists() {
-            initramfs.add_library(&libc)?;
+            builder.add_library(&libc)?;
             lib.push(config::Library { path: libc });
         }
 
         let hosts = PathBuf::from("/etc/hosts");
         if hosts.exists() {
-            initramfs.add_tree(&[hosts.clone()], Path::new("/etc"))?;
+            builder.add_tree(&[hosts.clone()], Path::new("/etc"))?;
             tree.push(config::Tree {
                 path: PathBuf::from("/etc"),
                 copy: vec![hosts],
@@ -443,11 +444,22 @@ mod tests {
 
         let udev = PathBuf::from("/lib/udev/rules.d");
         if udev.exists() {
-            initramfs.add_tree(&[udev.clone()], Path::new("/lib/udev/rules.d"))?;
+            builder.add_tree(&[udev.clone()], Path::new("/lib/udev/rules.d"))?;
             tree.push(config::Tree {
                 path: PathBuf::from("/lib/udev/rules.d"),
                 copy: vec![udev],
             });
+        }
+
+        let mut kmod = Kmod::new()?;
+        let btrfs = kmod.module_from_name("btrfs")?;
+
+        if btrfs.path().is_ok() {
+            builder.add_module(&mut kmod, btrfs)?;
+            module.push(config::Module {
+                name: Some("btrfs".to_string()),
+                path: None,
+            })
         }
 
         let config = config::Initramfs {
@@ -456,11 +468,15 @@ mod tests {
             bin: if bin.is_empty() { None } else { Some(bin) },
             lib: if lib.is_empty() { None } else { Some(lib) },
             tree: if tree.is_empty() { None } else { Some(tree) },
-            module: None,
+            module: if module.is_empty() {
+                None
+            } else {
+                Some(module)
+            },
         };
 
         assert_eq!(
-            initramfs.build().into_archive(),
+            builder.build().into_archive(),
             InitramfsBuilder::from_config(config)?
                 .build()
                 .into_archive(),

@@ -21,7 +21,7 @@ pub enum KmodError {
     ModuleFromPathFailed(PathBuf),
     #[error("failed to get module information: {0}")]
     ModuleGetInfoFailed(String),
-    #[error("the module handle is invalid, you may need to override the kernel release")]
+    #[error("the module handle for '{0}' is invalid, you may need to override the kernel release")]
     InvalidModuleHandle(String),
 }
 
@@ -134,17 +134,18 @@ impl Module {
         let name = name.as_ref();
         let cstr = CString::new(name)?;
 
-        let mut inner: MaybeUninit<*mut kmod_module> = MaybeUninit::uninit();
+        let mut list: MaybeUninit<*mut kmod_list> = MaybeUninit::zeroed();
 
         let inner = unsafe {
             let ret =
-                kmod_module_new_from_name(ctx.as_mut_ptr(), cstr.as_ptr(), inner.as_mut_ptr());
+                kmod_module_new_from_lookup(ctx.as_mut_ptr(), cstr.as_ptr(), list.as_mut_ptr());
 
             if ret < 0 {
                 bail!(KmodError::ModuleFromNameFailed(name.to_string()));
             }
 
-            inner.assume_init()
+            let list = list.assume_init();
+            kmod_module_get_module(list)
         };
 
         Ok(Module { inner })
