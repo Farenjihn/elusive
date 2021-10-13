@@ -1,15 +1,15 @@
 use anyhow::{bail, Result};
 use kmod_sys::*;
-use std::collections::HashMap;
 use std::ffi::CString;
 use std::ffi::{CStr, OsStr};
 use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 use std::{io, ptr};
 use thiserror::Error;
+
+const UNKNOWN_MODULE: &str = "unknown";
 
 #[derive(Error, Debug)]
 pub enum KmodError {
@@ -19,14 +19,15 @@ pub enum KmodError {
     ModuleFromNameFailed(String),
     #[error("failed to create module from path: {0}")]
     ModuleFromPathFailed(PathBuf),
-    #[error("a module with the same name was already added: {0}")]
-    ModuleNameCollision(String),
+    #[error("failed to get module information: {0}")]
+    ModuleGetInfoFailed(String),
+    #[error("the module handle is invalid, you may need to override the kernel release")]
+    InvalidModuleHandle(String),
 }
 
 pub struct Kmod {
     dir: PathBuf,
     inner: *mut kmod_ctx,
-    modules: HashMap<String, Rc<Module>>,
 }
 
 impl Kmod {
@@ -47,7 +48,6 @@ impl Kmod {
             Ok(Kmod {
                 dir: dir.to_path_buf(),
                 inner,
-                modules: HashMap::new(),
             })
         }
     }
@@ -60,36 +60,18 @@ impl Kmod {
         &self.dir
     }
 
-    pub fn module_from_name<T>(&mut self, name: T) -> Result<Rc<Module>>
+    pub fn module_from_name<T>(&mut self, name: T) -> Result<Module>
     where
         T: AsRef<str>,
     {
-        let module = Module::from_name(self, name)?;
-        self.module(module)
+        Module::from_name(self, name)
     }
 
-    pub fn module_from_path<T>(&mut self, path: T) -> Result<Rc<Module>>
+    pub fn module_from_path<T>(&mut self, path: T) -> Result<Module>
     where
         T: AsRef<Path>,
     {
-        let module = Module::from_path(self, path)?;
-        self.module(module)
-    }
-}
-
-impl Kmod {
-    fn module(&mut self, module: Module) -> Result<Rc<Module>> {
-        let name = module.name()?;
-        let name = name.to_string();
-
-        if self.modules.contains_key(&name) {
-            bail!(KmodError::ModuleNameCollision(name));
-        }
-
-        let module = Rc::new(module);
-        self.modules.insert(name, module.clone());
-
-        Ok(module)
+        Module::from_path(self, path)
     }
 }
 
@@ -109,6 +91,13 @@ impl Module {
     pub fn name(&self) -> Result<&str> {
         let cstr = unsafe {
             let name = kmod_module_get_name(self.inner);
+
+            if name.is_null() {
+                bail!(KmodError::InvalidModuleHandle(
+                    self.name().unwrap_or(UNKNOWN_MODULE).to_string()
+                ));
+            }
+
             CStr::from_ptr(name)
         };
 
@@ -116,13 +105,24 @@ impl Module {
         Ok(name)
     }
 
-    pub fn path(&self) -> &Path {
+    pub fn path(&self) -> Result<&Path> {
         let cstr = unsafe {
             let path = kmod_module_get_path(self.inner);
+
+            if path.is_null() {
+                bail!(KmodError::InvalidModuleHandle(
+                    self.name().unwrap_or(UNKNOWN_MODULE).to_string()
+                ));
+            }
+
             CStr::from_ptr(path)
         };
 
-        Path::new(OsStr::from_bytes(cstr.to_bytes()))
+        Ok(Path::new(OsStr::from_bytes(cstr.to_bytes())))
+    }
+
+    pub fn info(&self) -> Result<ModuleInfo> {
+        ModuleInfo::new(self)
     }
 }
 
@@ -172,6 +172,100 @@ impl Module {
         };
 
         Ok(Module { inner })
+    }
+}
+
+impl Drop for Module {
+    fn drop(&mut self) {
+        unsafe {
+            kmod_module_unref(self.inner);
+        }
+    }
+}
+
+pub struct ModuleInfo {
+    aliases: Vec<String>,
+    depends: Vec<String>,
+    softpre: Vec<String>,
+    softpost: Vec<String>,
+}
+
+impl ModuleInfo {
+    pub fn new(module: &Module) -> Result<Self> {
+        let mut list: MaybeUninit<*mut kmod_list> = MaybeUninit::zeroed();
+
+        let mut aliases = Vec::new();
+        let mut depends = Vec::new();
+        let mut softpre = Vec::new();
+        let mut softpost = Vec::new();
+
+        unsafe {
+            let ret = kmod_module_get_info(module.inner, list.as_mut_ptr());
+            if ret < 0 {
+                bail!(KmodError::ModuleGetInfoFailed(
+                    module.name().unwrap_or(UNKNOWN_MODULE).to_string()
+                ));
+            }
+
+            let list = list.assume_init();
+            let mut item = list;
+
+            while !item.is_null() {
+                let key = kmod_module_info_get_key(item);
+                let value = kmod_module_info_get_value(item);
+
+                let key = CStr::from_ptr(key).to_str()?;
+                let value = CStr::from_ptr(value);
+
+                match key {
+                    "alias" => aliases.push(value.to_str()?.to_string()),
+                    "depends" => {
+                        for depend in value.to_str()?.split(',') {
+                            if !depend.is_empty() {
+                                depends.push(depend.to_string());
+                            }
+                        }
+                    }
+                    "softdep" => {
+                        let value = value.to_str()?;
+
+                        if let Some(softdep) = value.strip_prefix("pre: ") {
+                            softpre.push(softdep.to_string());
+                        } else if let Some(softdep) = value.strip_prefix("post: ") {
+                            softpost.push(softdep.to_string());
+                        }
+                    }
+                    _ => (),
+                }
+
+                item = kmod_list_next(list, item);
+            }
+
+            kmod_module_info_free_list(list);
+        }
+
+        Ok(ModuleInfo {
+            aliases,
+            depends,
+            softpre,
+            softpost,
+        })
+    }
+
+    pub fn aliases(&self) -> &[String] {
+        &self.aliases
+    }
+
+    pub fn depends(&self) -> &[String] {
+        &self.depends
+    }
+
+    pub fn pre_softdeps(&self) -> &[String] {
+        &self.softpre
+    }
+
+    pub fn post_softdeps(&self) -> &[String] {
+        &self.softpost
     }
 }
 

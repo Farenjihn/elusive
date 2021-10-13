@@ -13,7 +13,6 @@ use log::{error, info};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 use walkdir::WalkDir;
 
 /// Default directories to include in the initramfs
@@ -259,6 +258,11 @@ impl Initramfs {
     /// Add a named kernel module to the initramfs
     pub fn add_module_from_name(&mut self, kmod: &mut Kmod, name: &str) -> Result<()> {
         let module = kmod.module_from_name(name)?;
+        let path = module.path()?;
+
+        if self.cache.contains(path) {
+            return Ok(());
+        }
 
         info!("Adding module with name: {}", name);
         self.add_module(kmod, module)?;
@@ -269,6 +273,11 @@ impl Initramfs {
     /// Add a kernel module to the initramfs from the provided path
     pub fn add_module_from_path(&mut self, kmod: &mut Kmod, path: &Path) -> Result<()> {
         let module = kmod.module_from_path(path)?;
+        let path = module.path()?;
+
+        if self.cache.contains(path) {
+            return Ok(());
+        }
 
         info!("Adding module from path: {}", path.display());
         self.add_module(kmod, module)?;
@@ -331,16 +340,14 @@ impl Initramfs {
         Ok(())
     }
 
-    fn add_module(&mut self, kmod: &Kmod, module: Rc<Module>) -> Result<()> {
-        if self.cache.contains(module.path()) {
-            return Ok(());
-        }
+    /// Add a module to the initramfs
+    fn add_module(&mut self, kmod: &mut Kmod, module: Module) -> Result<()> {
+        let path = module.path()?;
 
-        let metadata = fs::metadata(module.path())?;
-        let data = fs::read(module.path())?;
+        let metadata = fs::metadata(path)?;
+        let data = fs::read(path)?;
 
-        let filename = module
-            .path()
+        let filename = path
             .file_name()
             .context("missing filename in module path")?;
 
@@ -348,8 +355,18 @@ impl Initramfs {
             .with_metadata(&metadata)
             .build();
 
-        self.cache.insert(module.path().to_path_buf());
+        self.cache.insert(path.to_path_buf());
         self.entries.push(entry);
+
+        let info = module.info()?;
+        for name in info
+            .depends()
+            .iter()
+            .chain(info.pre_softdeps())
+            .chain(info.post_softdeps())
+        {
+            self.add_module_from_name(kmod, name)?;
+        }
 
         Ok(())
     }

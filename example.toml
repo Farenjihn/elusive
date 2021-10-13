@@ -37,20 +37,11 @@ copy = [
 
 # modules can be included in the initramfs
 [[initramfs.module]]
-name = "tpm"
+name = "tpm_tis"
 # path = /path/to/out/of/tree/module
 
 [[initramfs.module]]
-name = "tpm_tis"
-
-[[initramfs.module]]
-name = "tpm_tis_core"
-
-[[initramfs.module]]
 name = "tpm_crb"
-
-[[initramfs.module]]
-name = "rng-core"
 
 # declare the microcode archive configuration
 # and point the bundler to the proper path
