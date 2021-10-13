@@ -1,6 +1,6 @@
 use elusive::config::Config;
 use elusive::encoder::Encoder;
-use elusive::initramfs::Initramfs;
+use elusive::initramfs::InitramfsBuilder;
 use elusive::microcode::MicrocodeBundle;
 use elusive::utils;
 
@@ -108,8 +108,8 @@ fn main() -> Result<()> {
                 data.extend(ucode);
             }
 
-            let initramfs = Initramfs::from_config(config.initramfs)?;
-            let encoded = encoder.encode_archive(initramfs.build())?;
+            let initramfs = InitramfsBuilder::from_config(config.initramfs)?.build();
+            let encoded = encoder.encode_archive(initramfs.into_archive())?;
             data.extend(encoded);
 
             info!("Writing initramfs to: {}", output);

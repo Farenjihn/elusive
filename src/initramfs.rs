@@ -33,16 +33,16 @@ const ROOT_SYMLINKS: [(&str, &str); 6] = [
 const DEFAULT_DIR_MODE: u32 = 0o040_000 + 0o755;
 const DEFAULT_SYMLINK_MODE: u32 = 0o120_000;
 
-/// Builder pattern for initramfs generation
-pub struct Initramfs {
+/// Builder for initramfs generation
+pub struct InitramfsBuilder {
     /// Entries for the cpio archive
     entries: Vec<Entry>,
     /// Cache of processed paths to avoid duplicates
     cache: HashSet<PathBuf>,
 }
 
-impl Initramfs {
-    /// Create a new initramfs
+impl InitramfsBuilder {
+    /// Create a new builder
     pub fn new() -> Result<Self> {
         let mut cache = HashSet::new();
         let mut entries = Vec::new();
@@ -67,24 +67,25 @@ impl Initramfs {
             entries.push(entry);
         }
 
-        let initramfs = Initramfs { entries, cache };
-        Ok(initramfs)
+        let builder = InitramfsBuilder { entries, cache };
+
+        Ok(builder)
     }
 
-    /// Create a new initramfs from a configuration
+    /// Create a new builder from a configuration
     pub fn from_config(config: config::Initramfs) -> Result<Self> {
-        let mut initramfs = Initramfs::new()?;
-        initramfs.add_init(&config.init)?;
+        let mut builder = InitramfsBuilder::new()?;
+        builder.add_init(&config.init)?;
 
         if let Some(shutdown) = &config.shutdown {
-            initramfs.add_shutdown(shutdown)?;
+            builder.add_shutdown(shutdown)?;
         }
 
         if let Some(binaries) = config.bin {
             let paths: Vec<PathBuf> = binaries.into_iter().map(|bin| bin.path).collect();
 
             for path in paths {
-                initramfs.add_binary(&path)?;
+                builder.add_binary(&path)?;
             }
         }
 
@@ -92,32 +93,32 @@ impl Initramfs {
             let paths: Vec<PathBuf> = libraries.into_iter().map(|lib| lib.path).collect();
 
             for path in paths {
-                initramfs.add_library(&path)?;
+                builder.add_library(&path)?;
             }
         }
 
         if let Some(trees) = config.tree {
             for tree in trees {
-                initramfs.add_tree(&tree.copy, &tree.path)?;
+                builder.add_tree(&tree.copy, &tree.path)?;
             }
         }
 
         if let Some(modules) = config.module {
             let mut kmod = Kmod::new()?;
-            initramfs.mkdir_all(&kmod.dir().join("kernel"));
+            builder.mkdir_all(&kmod.dir().join("kernel"));
 
             for module in modules {
                 if let Some(path) = module.path {
-                    initramfs.add_module_from_path(&mut kmod, &path)?;
+                    builder.add_module_from_path(&mut kmod, &path)?;
                 } else if let Some(name) = module.name {
-                    initramfs.add_module_from_name(&mut kmod, &name)?;
+                    builder.add_module_from_name(&mut kmod, &name)?;
                 } else {
                     bail!("invalid kernel module configuration, one of 'name' or 'path' must be specified");
                 }
             }
         }
 
-        Ok(initramfs)
+        Ok(builder)
     }
 
     /// Add the init script from the provided path to the initramfs
@@ -285,13 +286,15 @@ impl Initramfs {
         Ok(())
     }
 
-    /// Return an archive from this initramfs
-    pub fn build(self) -> Archive {
-        Archive::new(self.entries)
+    /// Return an initramfs from this builder
+    pub fn build(self) -> Initramfs {
+        Initramfs {
+            entries: self.entries,
+        }
     }
 }
 
-impl Initramfs {
+impl InitramfsBuilder {
     fn add_entrypoint(&mut self, name: &str, path: &Path) -> Result<()> {
         if !path.exists() {
             error!("Failed to find {}: {}", name, path.display());
@@ -390,6 +393,19 @@ impl Initramfs {
     }
 }
 
+/// Finalized Initramfs
+pub struct Initramfs {
+    /// Entries for the cpio archive
+    entries: Vec<Entry>,
+}
+
+impl Initramfs {
+    /// Return an archive from this initramfs
+    pub fn into_archive(self) -> Archive {
+        Archive::new(self.entries)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -401,7 +417,7 @@ mod tests {
         let mut lib = vec![];
         let mut tree = vec![];
 
-        let mut initramfs = Initramfs::new()?;
+        let mut initramfs = InitramfsBuilder::new()?;
         initramfs.add_init(Path::new("/sbin/init"))?;
 
         let ls = PathBuf::from("/bin/ls");
@@ -443,7 +459,12 @@ mod tests {
             module: None,
         };
 
-        assert_eq!(initramfs.build(), Initramfs::from_config(config)?.build());
+        assert_eq!(
+            initramfs.build().into_archive(),
+            InitramfsBuilder::from_config(config)?
+                .build()
+                .into_archive(),
+        );
 
         Ok(())
     }
