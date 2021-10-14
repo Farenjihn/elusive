@@ -348,7 +348,7 @@ mod tests {
         let mut buf = Vec::new();
         entry.write(&mut buf)?;
 
-        assert!(buf.len() > 0);
+        assert!(!buf.is_empty());
 
         Ok(())
     }

@@ -195,7 +195,7 @@ mod tests {
             }
 
             if !found_libc {
-                bail!("resolver did not list libc in dependencies")
+                bail!("resolver did not list libc in dependencies");
             }
         }
 

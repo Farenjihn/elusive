@@ -4,7 +4,7 @@ use anyhow::Result;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use std::io::Write;
-use zstd::stream::write::Encoder as ZstdEncoder;
+use zstd::Encoder as ZstdEncoder;
 
 /// Represents the compression encoder used for an archive
 pub enum Encoder {
