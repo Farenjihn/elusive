@@ -11,6 +11,13 @@ use thiserror::Error;
 
 const UNKNOWN_MODULE: &str = "unknown";
 
+const MIN_BYTES_LEN: usize = 6;
+
+const ELF_MAGIC: [u8; 4] = [0x7F, b'E', b'L', b'F'];
+const ZSTD_MAGIC: [u8; 4] = [0x28, 0xb5, 0x2f, 0xfd];
+const XZ_MAGIC: [u8; 6] = [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00];
+const GZIP_MAGIC: [u8; 2] = [0x1F, 0x8B];
+
 #[derive(Error, Debug)]
 pub enum KmodError {
     #[error("failed to create module context")]
@@ -267,6 +274,48 @@ impl ModuleInfo {
 
     pub fn post_softdeps(&self) -> &[String] {
         &self.softpost
+    }
+}
+
+pub enum ModuleFormat {
+    Elf,
+    Zstd,
+    Xz,
+    Gzip,
+}
+
+impl ModuleFormat {
+    pub fn from_bytes(data: &[u8]) -> Result<Self> {
+        if data.len() < MIN_BYTES_LEN {
+            bail!("data is too small to detect file magic");
+        }
+
+        if data[..4] == ELF_MAGIC {
+            return Ok(ModuleFormat::Elf);
+        }
+
+        if data[..4] == ZSTD_MAGIC {
+            return Ok(ModuleFormat::Zstd);
+        }
+
+        if data[..6] == XZ_MAGIC {
+            return Ok(ModuleFormat::Xz);
+        }
+
+        if data[..2] == GZIP_MAGIC {
+            return Ok(ModuleFormat::Gzip);
+        }
+
+        bail!("unknown magic number");
+    }
+
+    pub fn extension(&self) -> &str {
+        match self {
+            ModuleFormat::Elf => "ko",
+            ModuleFormat::Zstd => "ko.zst",
+            ModuleFormat::Xz => "ko.xz",
+            ModuleFormat::Gzip => "ko.gz",
+        }
     }
 }
 

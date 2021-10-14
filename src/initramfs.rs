@@ -5,15 +5,17 @@
 
 use crate::config;
 use crate::depend;
-use crate::kmod::{Kmod, Module};
+use crate::kmod::{Kmod, Module, ModuleFormat};
 use crate::newc::{Archive, Entry, EntryBuilder};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use log::{error, info};
 use std::collections::HashSet;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+use zstd::Decoder as ZstdDecoder;
 
 /// Default directories to include in the initramfs
 const ROOT_DIRS: [&str; 11] = [
@@ -108,9 +110,9 @@ impl InitramfsBuilder {
 
             for module in modules {
                 if let Some(path) = module.path {
-                    builder.add_module_from_path(&mut kmod, &path)?;
+                    builder.add_module_from_path(&mut kmod, &path, config.uncompress_modules)?;
                 } else if let Some(name) = module.name {
-                    builder.add_module_from_name(&mut kmod, &name)?;
+                    builder.add_module_from_name(&mut kmod, &name, config.uncompress_modules)?;
                 } else {
                     bail!("invalid kernel module configuration, one of 'name' or 'path' must be specified");
                 }
@@ -256,7 +258,12 @@ impl InitramfsBuilder {
     }
 
     /// Add a named kernel module to the initramfs
-    pub fn add_module_from_name(&mut self, kmod: &mut Kmod, name: &str) -> Result<()> {
+    pub fn add_module_from_name(
+        &mut self,
+        kmod: &mut Kmod,
+        name: &str,
+        uncompress: bool,
+    ) -> Result<()> {
         let module = kmod.module_from_name(name)?;
         let path = module.path()?;
 
@@ -265,13 +272,18 @@ impl InitramfsBuilder {
         }
 
         info!("Adding module with name: {}", name);
-        self.add_module(kmod, module)?;
+        self.add_module(kmod, module, uncompress)?;
 
         Ok(())
     }
 
     /// Add a kernel module to the initramfs from the provided path
-    pub fn add_module_from_path(&mut self, kmod: &mut Kmod, path: &Path) -> Result<()> {
+    pub fn add_module_from_path(
+        &mut self,
+        kmod: &mut Kmod,
+        path: &Path,
+        uncompress: bool,
+    ) -> Result<()> {
         let module = kmod.module_from_path(path)?;
         let path = module.path()?;
 
@@ -280,7 +292,7 @@ impl InitramfsBuilder {
         }
 
         info!("Adding module from path: {}", path.display());
-        self.add_module(kmod, module)?;
+        self.add_module(kmod, module, uncompress)?;
 
         Ok(())
     }
@@ -343,16 +355,24 @@ impl InitramfsBuilder {
     }
 
     /// Add a module to the initramfs
-    fn add_module(&mut self, kmod: &mut Kmod, module: Module) -> Result<()> {
+    fn add_module(&mut self, kmod: &mut Kmod, module: Module, uncompress: bool) -> Result<()> {
         self.mkdir_all(&kmod.dir().join("kernel"));
         let path = module.path()?;
 
         let metadata = fs::metadata(path)?;
         let data = fs::read(path)?;
 
-        let filename = path
-            .file_name()
-            .context("missing filename in module path")?;
+        let format = ModuleFormat::from_bytes(&data)?;
+
+        let (filename, data) = if uncompress {
+            let filename = format!("{}.ko", module.name()?);
+            let data = uncompress_module(&data, &format)?;
+
+            (filename, data)
+        } else {
+            let filename = format!("{}.{}", module.name()?, format.extension());
+            (filename, data)
+        };
 
         let entry = EntryBuilder::file(kmod.dir().join("kernel").join(filename), data)
             .with_metadata(&metadata)
@@ -368,7 +388,7 @@ impl InitramfsBuilder {
             .chain(info.pre_softdeps())
             .chain(info.post_softdeps())
         {
-            self.add_module_from_name(kmod, name)?;
+            self.add_module_from_name(kmod, name, uncompress)?;
         }
 
         Ok(())
@@ -455,7 +475,7 @@ mod tests {
         let btrfs = kmod.module_from_name("btrfs")?;
 
         if btrfs.path().is_ok() {
-            builder.add_module(&mut kmod, btrfs)?;
+            builder.add_module(&mut kmod, btrfs, false)?;
             module.push(config::Module {
                 name: Some("btrfs".to_string()),
                 path: None,
@@ -473,6 +493,7 @@ mod tests {
             } else {
                 Some(module)
             },
+            uncompress_modules: false,
         };
 
         assert_eq!(
@@ -483,5 +504,21 @@ mod tests {
         );
 
         Ok(())
+    }
+}
+
+fn uncompress_module(data: &[u8], format: &ModuleFormat) -> Result<Vec<u8>> {
+    match format {
+        ModuleFormat::Elf => Ok(data.to_vec()),
+        ModuleFormat::Zstd => {
+            let mut decoder = ZstdDecoder::new(data)?;
+
+            let mut data = Vec::new();
+            decoder.read_to_end(&mut data)?;
+
+            Ok(data)
+        }
+        ModuleFormat::Xz => todo!(),
+        ModuleFormat::Gzip => todo!(),
     }
 }

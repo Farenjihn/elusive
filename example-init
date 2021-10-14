@@ -6,8 +6,7 @@ mount -t devtmpfs devtmpfs -o nosuid /dev
 mount -t proc proc -o nosuid,nodev,noexec /proc
 mount -t sysfs sys -o nosuid,nodev,noexec /sys
 
-/sbin/depmod 2>/dev/null
-/sbin/modprobe tpm_tis tpm_crb
+modprobe tpm_tis tpm_crb
 
 if [ -e /dev/tpmrm0 ]; then
     echo -e "TPM successfully detected !\n"

@@ -2,6 +2,7 @@
 # which file will be run as PID 1
 [initramfs]
 init = "example-init"
+uncompress_modules = true
 
 # specify binaries to include
 [[initramfs.bin]]
@@ -9,12 +10,6 @@ path = "/bin/busybox"
 
 [[initramfs.bin]]
 path = "/sbin/cryptsetup"
-
-[[initramfs.bin]]
-path = "/sbin/depmod"
-
-[[initramfs.bin]]
-path = "/sbin/modprobe"
 
 # specify libraries to include
 [[initramfs.lib]]

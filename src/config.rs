@@ -49,6 +49,9 @@ pub struct Initramfs {
     pub tree: Option<Vec<Tree>>,
     /// Modules to include in the initramfs
     pub module: Option<Vec<Module>>,
+    /// Sets whether added modules should be uncompressed
+    #[serde(default)]
+    pub uncompress_modules: bool,
 }
 
 /// Configuration for an executable binary
