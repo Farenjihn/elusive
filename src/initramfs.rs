@@ -9,12 +9,14 @@ use crate::kmod::{Kmod, Module, ModuleFormat};
 use crate::newc::{Archive, Entry, EntryBuilder};
 
 use anyhow::{bail, Result};
+use flate2::read::GzDecoder;
 use log::{error, info};
 use std::collections::HashSet;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+use xz2::read::XzDecoder;
 use zstd::Decoder as ZstdDecoder;
 
 /// Default directories to include in the initramfs
@@ -508,17 +510,23 @@ mod tests {
 }
 
 fn uncompress_module(data: &[u8], format: &ModuleFormat) -> Result<Vec<u8>> {
+    let mut buf = Vec::new();
+
     match format {
-        ModuleFormat::Elf => Ok(data.to_vec()),
+        ModuleFormat::Elf => buf.extend(data),
         ModuleFormat::Zstd => {
             let mut decoder = ZstdDecoder::new(data)?;
-
-            let mut data = Vec::new();
-            decoder.read_to_end(&mut data)?;
-
-            Ok(data)
+            decoder.read_to_end(&mut buf)?;
         }
-        ModuleFormat::Xz => todo!(),
-        ModuleFormat::Gzip => todo!(),
+        ModuleFormat::Xz => {
+            let mut decoder = XzDecoder::new(data);
+            decoder.read_to_end(&mut buf)?;
+        }
+        ModuleFormat::Gzip => {
+            let mut decoder = GzDecoder::new(data);
+            decoder.read_to_end(&mut buf)?;
+        }
     }
+
+    Ok(buf)
 }
