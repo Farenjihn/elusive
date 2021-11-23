@@ -512,7 +512,7 @@ mod tests {
 
         assert_eq!(
             builder.build().into_archive(),
-            InitramfsBuilder::from_config(config)?
+            InitramfsBuilder::from_config(config, None)?
                 .build()
                 .into_archive(),
         );
