@@ -15,29 +15,35 @@ pub enum Encoder {
 
 impl Encoder {
     /// Encode the provided archive using the specified encoder variant
-    pub fn encode_archive(&self, archive: Archive) -> Result<Vec<u8>> {
+    pub fn encode_archive<T>(&self, archive: Archive, out: T) -> Result<()>
+    where
+        T: Write,
+    {
         let data = archive.into_bytes()?;
-        self.encode(&data)
+        self.encode(&data, out)
     }
 
     /// Encode the provided bytes using the specified encoder variant
-    pub fn encode(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let mut buf = Vec::new();
-
+    pub fn encode<T>(&self, data: &[u8], mut out: T) -> Result<()>
+    where
+        T: Write,
+    {
         match self {
-            Encoder::None => return Ok(data.to_vec()),
+            Encoder::None => {
+                out.write_all(data)?;
+            }
             Encoder::Gzip => {
-                let mut gzenc = GzEncoder::new(&mut buf, Compression::default());
+                let mut gzenc = GzEncoder::new(&mut out, Compression::default());
                 gzenc.write_all(data)?;
             }
             Encoder::Zstd => {
-                let mut zstdenc = ZstdEncoder::new(&mut buf, 3)?;
+                let mut zstdenc = ZstdEncoder::new(&mut out, 3)?;
                 zstdenc.write_all(data)?;
                 zstdenc.finish()?;
             }
         }
 
-        Ok(buf)
+        Ok(())
     }
 }
 

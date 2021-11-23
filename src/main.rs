@@ -7,11 +7,10 @@ use elusive::utils;
 use anyhow::{bail, Result};
 use clap::{App, AppSettings, Arg, SubCommand};
 use env_logger::Env;
-use log::info;
-use log::warn;
-use std::fs;
-use std::io::{BufReader, BufWriter, Read, Write};
+use log::{info, warn};
+use std::io::{BufReader, BufWriter};
 use std::path::Path;
+use std::{fs, io};
 
 /// Default path for the config file
 const CONFIG_PATH: &str = "/etc/elusive.toml";
@@ -104,36 +103,35 @@ fn main() -> Result<()> {
             let ucode = initramfs.value_of("ucode");
             let module_dir = initramfs.value_of_os("modules").map(Path::new);
 
-            let mut data = Vec::new();
+            let initramfs = InitramfsBuilder::from_config(config.initramfs, module_dir)?.build();
+
+            info!("Writing initramfs to: {}", output);
+            let write = utils::file_or_stdout(output)?;
+            let mut write = BufWriter::new(write);
 
             if let Some(path) = ucode {
                 info!("Adding microcode bundle from: {}", path);
 
                 let read = utils::file_or_stdin(path)?;
-                let mut ucode = Vec::new();
-                BufReader::new(read).read_to_end(&mut ucode)?;
+                let mut read = BufReader::new(read);
 
-                data.extend(ucode);
+                io::copy(&mut read, &mut write)?;
             }
 
-            let initramfs = InitramfsBuilder::from_config(config.initramfs, module_dir)?.build();
-            let encoded = encoder.encode_archive(initramfs.into_archive())?;
-            data.extend(encoded);
-
-            info!("Writing initramfs to: {}", output);
-            let write = utils::file_or_stdout(output)?;
-            BufWriter::new(write).write_all(&data)?;
+            encoder.encode_archive(initramfs.into_archive(), write)?;
         }
         ("microcode", Some(microcode)) => {
             let output = microcode.value_of("output").unwrap();
 
             if let Some(microcode) = config.microcode {
                 let bundle = MicrocodeBundle::from_config(microcode)?;
-                let encoded = encoder.encode_archive(bundle.build())?;
+                // let encoded = encoder.encode_archive(bundle.build())?;
 
                 info!("Writing microcode cpio to: {}", output);
                 let write = utils::file_or_stdout(output)?;
-                BufWriter::new(write).write_all(&encoded)?;
+                let write = BufWriter::new(write);
+
+                encoder.encode_archive(bundle.build(), write)?;
             } else {
                 warn!("No configuration provided for microcode generation");
             }
