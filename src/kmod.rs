@@ -85,7 +85,8 @@ impl Kmod {
 impl Drop for Kmod {
     fn drop(&mut self) {
         unsafe {
-            kmod_unref(self.inner);
+            let ret = kmod_unref(self.inner);
+            assert!(ret.is_null());
         }
     }
 }
@@ -152,7 +153,10 @@ impl Module {
             }
 
             let list = list.assume_init();
-            kmod_module_get_module(list)
+            let module = kmod_module_get_module(list);
+
+            kmod_module_unref_list(list);
+            module
         };
 
         Ok(Module { inner })
