@@ -26,7 +26,7 @@ By default, configuration is read from `/etc/elusive.toml`, but the path can be 
 
 I wrote this in my free time to help me customize a Gentoo system I use in attack-defense CTFs, and also for fun. In my initial use case, I wanted to have control over the entire boot process for my box through the use of secure boot and various hardware components like TPMs.
 
-For that reason, there is no support to add kernel modules in the initramfs. Since the original use case means having control over the kernel configuration, the assumption is users can configure their kernel and select the needed features as built-in.
+For that reason, there is only basic support to add kernel modules in the initramfs. Since the original use case means having control over the kernel configuration, the assumption is users can configure their kernel and select the needed features as built-in, or be knowledgable enough to load them in the initramfs.
 
 This is probably not useful if you do not want to write your own init script, or do something that is not supported by the likes of `mkinicpio`, `dracut` or other "batteries-included" initramfs generators.
 
