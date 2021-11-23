@@ -76,8 +76,9 @@ impl InitramfsBuilder {
         Ok(builder)
     }
 
-    /// Create a new builder from a configuration
-    pub fn from_config(config: config::Initramfs) -> Result<Self> {
+    /// Create a new builder from a configuration, optionally providing
+    /// a source directory for kernel modules
+    pub fn from_config(config: config::Initramfs, module_dir: Option<&Path>) -> Result<Self> {
         let mut builder = InitramfsBuilder::new()?;
         builder.add_init(&config.init)?;
 
@@ -108,7 +109,18 @@ impl InitramfsBuilder {
         }
 
         if let Some(modules) = config.module {
-            let mut kmod = Kmod::new()?;
+            let mut kmod = if let Some(path) = module_dir {
+                if !path.exists() {
+                    bail!(
+                        "invalid kernel module directory, '{}' does not exist",
+                        path.display()
+                    );
+                }
+
+                Kmod::with_directory(path)
+            } else {
+                Kmod::new()
+            }?;
 
             for module in modules {
                 if let Some(path) = module.path {

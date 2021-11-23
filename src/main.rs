@@ -52,6 +52,13 @@ fn main() -> Result<()> {
                         .takes_value(true),
                 )
                 .arg(
+                    Arg::with_name("modules")
+                        .short("m")
+                        .long("modules")
+                        .help("Path to the kernel module source directory")
+                        .takes_value(true),
+                )
+                .arg(
                     Arg::with_name("output")
                         .short("o")
                         .long("output")
@@ -95,6 +102,7 @@ fn main() -> Result<()> {
         ("initramfs", Some(initramfs)) => {
             let output = initramfs.value_of("output").unwrap();
             let ucode = initramfs.value_of("ucode");
+            let module_dir = initramfs.value_of_os("modules").map(Path::new);
 
             let mut data = Vec::new();
 
@@ -108,7 +116,7 @@ fn main() -> Result<()> {
                 data.extend(ucode);
             }
 
-            let initramfs = InitramfsBuilder::from_config(config.initramfs)?.build();
+            let initramfs = InitramfsBuilder::from_config(config.initramfs, module_dir)?.build();
             let encoded = encoder.encode_archive(initramfs.into_archive())?;
             data.extend(encoded);
 
