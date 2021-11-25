@@ -7,6 +7,11 @@ license = "GPL-3.0"
 repository = "https://github.com/Farenjihn/elusive"
 edition = "2018"
 
+[workspace]
+members = [
+    "kmod-sys"
+]
+
 [[bin]]
 name = "elusive"
 path = "src/main.rs"
@@ -16,7 +21,6 @@ anyhow = "1.0.48"
 clap = "2.33.3"
 env_logger = "0.9.0"
 flate2 = "1.0.22"
-kmod-sys = "0.1.2"
 libc = "0.2.108"
 log = "0.4.14"
 thiserror = "1.0.30"
@@ -33,3 +37,6 @@ features = ["elf", "read_core", "std"]
 [dependencies.serde]
 version = "1.0.130"
 features = ["derive"]
+
+[dependencies.kmod-sys]
+path = "kmod-sys"
