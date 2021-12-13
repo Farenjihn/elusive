@@ -17,11 +17,11 @@ name = "elusive"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.48"
-clap = "2.33.3"
+anyhow = "1.0.51"
+clap = "2.34.0"
 env_logger = "0.9.0"
 flate2 = "1.0.22"
-libc = "0.2.108"
+libc = "0.2.112"
 log = "0.4.14"
 thiserror = "1.0.30"
 toml = "0.5.8"
@@ -30,12 +30,12 @@ xz2 = "0.1.6"
 zstd = "0.9.0"
 
 [dependencies.object]
-version = "0.27.1"
+version = "0.28.1"
 default-features = false
 features = ["elf", "read_core", "std"]
 
 [dependencies.serde]
-version = "1.0.130"
+version = "1.0.131"
 features = ["derive"]
 
 [dependencies.kmod-sys]
