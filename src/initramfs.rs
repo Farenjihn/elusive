@@ -25,13 +25,14 @@ const ROOT_DIRS: [&str; 11] = [
 ];
 
 /// Default symlinks to create within the initramfs
-const ROOT_SYMLINKS: [(&str, &str); 6] = [
+const ROOT_SYMLINKS: [(&str, &str); 7] = [
     ("/bin", "usr/bin"),
     ("/lib", "usr/lib"),
     ("/lib64", "usr/lib"),
     ("/sbin", "usr/bin"),
     ("/usr/lib64", "lib"),
     ("/usr/sbin", "bin"),
+    ("/var/run", "../run"),
 ];
 
 const DEFAULT_DIR_MODE: u32 = 0o040_000 + 0o755;
