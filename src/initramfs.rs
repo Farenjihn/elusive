@@ -311,11 +311,6 @@ impl InitramfsBuilder {
         uncompress: bool,
     ) -> Result<()> {
         let module = kmod.module_from_name(name)?;
-        let path = module.path()?;
-
-        if self.cache.contains(path) {
-            return Ok(());
-        }
 
         info!("Adding module with name: {}", name);
         self.add_module(kmod, module, uncompress)?;
@@ -331,11 +326,6 @@ impl InitramfsBuilder {
         uncompress: bool,
     ) -> Result<()> {
         let module = kmod.module_from_path(path)?;
-        let path = module.path()?;
-
-        if self.cache.contains(path) {
-            return Ok(());
-        }
 
         info!("Adding module from path: {}", path.display());
         self.add_module(kmod, module, uncompress)?;
@@ -405,6 +395,10 @@ impl InitramfsBuilder {
         self.mkdir_all(&kmod.dir().join("kernel"));
         let path = module.path()?;
 
+        if self.cache.contains(path) {
+            return Ok(());
+        }
+
         let metadata = fs::metadata(path)?;
         let data = fs::read(path)?;
 
@@ -434,7 +428,8 @@ impl InitramfsBuilder {
             .chain(info.pre_softdeps())
             .chain(info.post_softdeps())
         {
-            self.add_module_from_name(kmod, name, uncompress)?;
+            let module = kmod.module_from_name(name)?;
+            self.add_module(kmod, module, uncompress)?;
         }
 
         Ok(())
