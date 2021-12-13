@@ -108,6 +108,12 @@ impl InitramfsBuilder {
             }
         }
 
+        if let Some(symlinks) = config.symlink {
+            for symlink in symlinks {
+                builder.add_symlink(&symlink.path, &symlink.link)?;
+            }
+        }
+
         if let Some(modules) = config.module {
             let mut kmod = if let Some(path) = module_dir {
                 if !path.exists() {
@@ -267,6 +273,27 @@ impl InitramfsBuilder {
                 self.entries.push(entry);
             }
         }
+
+        Ok(())
+    }
+
+    /// Add a symlink to the initramfs
+    pub fn add_symlink(&mut self, path: &Path, link: &Path) -> Result<()> {
+        if self.cache.contains(path) {
+            return Ok(());
+        }
+
+        if let Some(parent) = path.parent() {
+            self.mkdir_all(parent);
+        }
+
+        info!("Adding symlink: {} -> {}", path.display(), link.display());
+        let entry = EntryBuilder::symlink(path, link)
+            .mode(DEFAULT_SYMLINK_MODE)
+            .build();
+
+        self.cache.insert(path.to_path_buf());
+        self.entries.push(entry);
 
         Ok(())
     }

@@ -47,6 +47,8 @@ pub struct Initramfs {
     pub lib: Option<Vec<Library>>,
     /// Filesystem trees to copy into the initramfs
     pub tree: Option<Vec<Tree>>,
+    /// Symlinks to add to the initramfs
+    pub symlink: Option<Vec<Symlink>>,
     /// Modules to include in the initramfs
     pub module: Option<Vec<Module>>,
     /// Sets whether added modules should be uncompressed
@@ -84,6 +86,14 @@ pub struct Tree {
     pub path: PathBuf,
     /// The list of files and directories to copy
     pub copy: Vec<PathBuf>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Symlink {
+    /// The path where the symlink will be placed
+    pub path: PathBuf,
+    /// The file the symlink points to
+    pub link: PathBuf,
 }
 
 /// Configuration for a kernel module
