@@ -88,18 +88,14 @@ impl InitramfsBuilder {
         }
 
         if let Some(binaries) = config.bin {
-            let paths: Vec<PathBuf> = binaries.into_iter().map(|bin| bin.path).collect();
-
-            for path in paths {
-                builder.add_binary(&path)?;
+            for binary in binaries {
+                builder.add_binary(&binary.path, binary.keep_path)?;
             }
         }
 
         if let Some(libraries) = config.lib {
-            let paths: Vec<PathBuf> = libraries.into_iter().map(|lib| lib.path).collect();
-
-            for path in paths {
-                builder.add_library(&path)?;
+            for library in libraries {
+                builder.add_library(&library.path)?;
             }
         }
 
@@ -168,13 +164,21 @@ impl InitramfsBuilder {
     }
 
     /// Add the binary from the provided path to the initramfs
-    pub fn add_binary(&mut self, path: &Path) -> Result<()> {
+    /// if keep_path is false, the binary is installed in /usr/bin
+    pub fn add_binary(&mut self, path: &Path, keep_path: bool) -> Result<()> {
         if self.cache.contains(path) {
             return Ok(());
         }
 
+        let dest = if keep_path {
+            path.parent().unwrap_or_else(|| Path::new("/usr/bin"))
+        } else {
+            Path::new("/usr/bin")
+        };
+
         info!("Adding binary: {}", path.display());
-        self.add_elf(path, Path::new("/usr/bin"))?;
+        self.mkdir_all(dest);
+        self.add_elf(path, dest)?;
 
         for dependency in depend::resolve(path)? {
             self.add_library(&dependency)?;
@@ -452,6 +456,7 @@ impl InitramfsBuilder {
 
         let entry = EntryBuilder::directory(path).mode(DEFAULT_DIR_MODE).build();
         self.entries.push(entry);
+        self.cache.insert(path.to_path_buf());
     }
 }
 

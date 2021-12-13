@@ -61,6 +61,10 @@ pub struct Initramfs {
 pub struct Binary {
     /// The path where the binary can be found
     pub path: PathBuf,
+    /// Whether to keep the original path, if false
+    /// the binary will be placed in /usr/bin
+    #[serde(default)]
+    pub keep_path: bool,
 }
 
 /// Configuration for a dynamic library
