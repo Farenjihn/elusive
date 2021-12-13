@@ -125,7 +125,6 @@ fn main() -> Result<()> {
 
             if let Some(microcode) = config.microcode {
                 let bundle = MicrocodeBundle::from_config(microcode)?;
-                // let encoded = encoder.encode_archive(bundle.build())?;
 
                 info!("Writing microcode cpio to: {}", output);
                 let write = utils::file_or_stdout(output)?;
