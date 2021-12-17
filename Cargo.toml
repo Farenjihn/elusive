@@ -1,6 +1,6 @@
 [package]
 name = "elusive"
-version = "0.6.2"
+version = "0.7.0"
 authors = ["Valentin Finini <farenjihn@gmail.com>"]
 description = "A custom initramfs generator"
 license = "GPL-3.0"
