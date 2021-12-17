@@ -29,7 +29,7 @@ use std::path::PathBuf;
 #[derive(Deserialize, Debug)]
 pub struct Config {
     /// Configuration for initramfs generation
-    pub initramfs: Initramfs,
+    pub initramfs: Option<Initramfs>,
     /// Configuration for microcode bundle generation
     pub microcode: Option<Microcode>,
 }
