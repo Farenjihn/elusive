@@ -66,6 +66,7 @@ impl FromStr for Encoder {
 mod tests {
     use super::*;
     use crate::newc::EntryBuilder;
+    use std::io;
 
     fn dummy_archive() -> Archive {
         Archive::new(vec![EntryBuilder::file(
@@ -77,8 +78,10 @@ mod tests {
 
     #[test]
     fn test_encode() -> Result<()> {
+        let sink = io::sink();
+
         let archive = dummy_archive();
-        Encoder::None.encode_archive(archive)?;
+        Encoder::None.encode_archive(archive, sink)?;
 
         Ok(())
     }
@@ -88,13 +91,13 @@ mod tests {
         let archive = dummy_archive();
         let data = archive.into_bytes()?;
 
-        let none_enc = Encoder::None;
-        let gzip_enc = Encoder::Gzip;
-        let zstd_enc = Encoder::Zstd;
+        let mut none = Vec::new();
+        let mut gzip = Vec::new();
+        let mut zstd = Vec::new();
 
-        let none = none_enc.encode(&data)?;
-        let gzip = gzip_enc.encode(&data)?;
-        let zstd = zstd_enc.encode(&data)?;
+        Encoder::None.encode(&data, &mut none)?;
+        Encoder::Gzip.encode(&data, &mut gzip)?;
+        Encoder::Zstd.encode(&data, &mut zstd)?;
 
         // gzip should always compress better
         assert!(none.len() > gzip.len());

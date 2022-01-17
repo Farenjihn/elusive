@@ -485,8 +485,11 @@ mod tests {
 
         let ls = PathBuf::from("/bin/ls");
         if ls.exists() {
-            builder.add_binary(&ls)?;
-            bin.push(config::Binary { path: ls });
+            builder.add_binary(&ls, false)?;
+            bin.push(config::Binary {
+                path: ls,
+                keep_path: false,
+            });
         }
 
         let libc = PathBuf::from("/lib/libc.so.6");
@@ -535,6 +538,7 @@ mod tests {
             } else {
                 Some(module)
             },
+            symlink: None,
             uncompress_modules: false,
         };
 
