@@ -1,12 +1,14 @@
 use crate::newc::Archive;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use std::io::Write;
+use std::str::FromStr;
 use zstd::Encoder as ZstdEncoder;
 
 /// Represents the compression encoder used for an archive
+#[derive(Debug)]
 pub enum Encoder {
     None,
     Gzip,
@@ -44,6 +46,19 @@ impl Encoder {
         }
 
         Ok(())
+    }
+}
+
+impl FromStr for Encoder {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "none" => Ok(Encoder::None),
+            "gzip" => Ok(Encoder::Gzip),
+            "zstd" => Ok(Encoder::Zstd),
+            other => bail!("unknown encoder: {}", other),
+        }
     }
 }
 

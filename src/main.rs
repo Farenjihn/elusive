@@ -5,18 +5,61 @@ use elusive::microcode::MicrocodeBundle;
 use elusive::utils;
 
 use anyhow::{bail, Result};
-use clap::{App, AppSettings, Arg, SubCommand};
+// use clap::{App, AppSettings, Arg, SubCommand};
+use clap::{AppSettings, Parser, Subcommand};
 use env_logger::Env;
 use log::{error, info};
 use std::fs::File;
 use std::io::Read;
 use std::io::{BufReader, BufWriter};
-use std::path::Path;
+use std::path::PathBuf;
 use std::{fs, io};
 
 /// Default path for the config file
 const CONFIG_PATH: &str = "/etc/elusive.toml";
 const CONFDIR_PATH: &str = "/etc/elusive.d";
+
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+#[clap(setting(AppSettings::SubcommandRequiredElseHelp))]
+struct Args {
+    /// Path to the configuration file
+    #[clap(short, long)]
+    #[clap(global = true)]
+    config: Option<PathBuf>,
+    /// Path to the configuration directory
+    #[clap(short = 'C', long)]
+    #[clap(global = true)]
+    confdir: Option<PathBuf>,
+    #[clap(short, long)]
+    #[clap(global = true)]
+    /// Encoder to use for compression
+    encoder: Option<Encoder>,
+    #[clap(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Generate a compressed cpio archive to use as initramfs
+    Initramfs {
+        /// Microcode archive to include
+        #[clap(short, long)]
+        ucode: Option<PathBuf>,
+        /// Path to the kernel module source directory
+        #[clap(short, long)]
+        modules: Option<PathBuf>,
+        /// Path where the initramfs will be written
+        #[clap(short, long)]
+        output: PathBuf,
+    },
+    /// Generate a compressed cpio archive for CPU microcode
+    Microcode {
+        /// Path where the microcode archive will be written
+        #[clap(short, long)]
+        output: PathBuf,
+    },
+}
 
 /// Entrypoint of the program
 #[cfg(not(tarpaulin_include))]
@@ -24,87 +67,19 @@ fn main() -> Result<()> {
     let env = Env::default().filter_or("RUST_LOG", "info");
     env_logger::init_from_env(env);
 
-    let app = App::new("elusive")
-        .version(clap::crate_version!())
-        .setting(AppSettings::SubcommandRequiredElseHelp)
-        .arg(
-            Arg::with_name("config")
-                .short("c")
-                .long("config")
-                .takes_value(true)
-                .global(true)
-                .help("Path to the configuration file"),
-        )
-        .arg(
-            Arg::with_name("confdir")
-                .short("C")
-                .long("confdir")
-                .takes_value(true)
-                .global(true)
-                .help("Path to the configuration directory"),
-        )
-        .arg(
-            Arg::with_name("encoder")
-                .short("e")
-                .long("encoder")
-                .takes_value(true)
-                .global(true)
-                .help("Encoder to use for compression"),
-        )
-        .subcommand(
-            SubCommand::with_name("initramfs")
-                .about("Generate a compressed cpio archive for initramfs")
-                .arg(
-                    Arg::with_name("ucode")
-                        .short("u")
-                        .long("ucode")
-                        .help("Microcode archive to include")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("modules")
-                        .short("m")
-                        .long("modules")
-                        .help("Path to the kernel module source directory")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("output")
-                        .short("o")
-                        .long("output")
-                        .takes_value(true)
-                        .required(true)
-                        .help("Path where the initramfs will be written"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("microcode")
-                .about("Generate a cpio archive for your CPU microcode")
-                .arg(
-                    Arg::with_name("output")
-                        .short("o")
-                        .long("output")
-                        .takes_value(true)
-                        .required(true)
-                        .help("Path where the microcode archive will be written"),
-                ),
-        );
+    let args = Args::parse();
 
-    let matches = app.get_matches();
-
-    let config_path = matches.value_of("config").unwrap_or(CONFIG_PATH);
-    let confdir_path = matches.value_of("confdir").unwrap_or(CONFDIR_PATH);
+    let config_path = args.config.unwrap_or_else(|| PathBuf::from(CONFIG_PATH));
+    let confdir_path = args.confdir.unwrap_or_else(|| PathBuf::from(CONFDIR_PATH));
 
     let mut buf = Vec::new();
 
-    let path = Path::new(config_path);
-    if path.exists() && path.is_file() {
-        File::open(path)?.read_to_end(&mut buf)?;
+    if config_path.exists() && config_path.is_file() {
+        File::open(&config_path)?.read_to_end(&mut buf)?;
     }
 
-    let path = Path::new(confdir_path);
-    if path.exists() && path.is_dir() {
-        for entry in fs::read_dir(confdir_path)? {
+    if confdir_path.exists() && confdir_path.is_dir() {
+        for entry in fs::read_dir(&confdir_path)? {
             let entry = entry?;
             let path = entry.path();
 
@@ -117,36 +92,30 @@ fn main() -> Result<()> {
     if buf.is_empty() {
         bail!(
             "configuration was file or directory was found in {}, {}",
-            config_path,
-            confdir_path
+            config_path.display(),
+            confdir_path.display(),
         );
     }
 
     let config: Config = toml::from_slice(&buf)?;
-
     // use zstd by default
-    let encoder = match matches.value_of("encoder").unwrap_or("zstd") {
-        "none" => Encoder::None,
-        "gzip" => Encoder::Gzip,
-        "zstd" => Encoder::Zstd,
-        other => bail!("unknown encoder: {}", other),
-    };
+    let encoder = args.encoder.unwrap_or(Encoder::Zstd);
 
-    match matches.subcommand() {
-        ("initramfs", Some(initramfs)) => {
+    match args.command {
+        Command::Initramfs {
+            ucode,
+            modules,
+            output,
+        } => {
             if let Some(config) = config.initramfs {
-                let output = initramfs.value_of("output").unwrap();
-                let ucode = initramfs.value_of("ucode");
-                let module_dir = initramfs.value_of_os("modules").map(Path::new);
+                let initramfs = InitramfsBuilder::from_config(config, modules.as_deref())?.build();
 
-                let initramfs = InitramfsBuilder::from_config(config, module_dir)?.build();
-
-                info!("Writing initramfs to: {}", output);
+                info!("Writing initramfs to: {}", output.display());
                 let write = utils::file_or_stdout(output)?;
                 let mut write = BufWriter::new(write);
 
                 if let Some(path) = ucode {
-                    info!("Adding microcode bundle from: {}", path);
+                    info!("Adding microcode bundle from: {}", path.display());
 
                     let read = utils::file_or_stdin(path)?;
                     let mut read = BufReader::new(read);
@@ -160,13 +129,11 @@ fn main() -> Result<()> {
                 bail!("configuration was empty");
             }
         }
-        ("microcode", Some(microcode)) => {
-            let output = microcode.value_of("output").unwrap();
-
+        Command::Microcode { output } => {
             if let Some(config) = config.microcode {
                 let bundle = MicrocodeBundle::from_config(config)?;
 
-                info!("Writing microcode cpio to: {}", output);
+                info!("Writing microcode cpio to: {}", output.display());
                 let write = utils::file_or_stdout(output)?;
                 let write = BufWriter::new(write);
 
@@ -176,7 +143,6 @@ fn main() -> Result<()> {
                 bail!("configuration was empty");
             }
         }
-        (subcommand, _) => unreachable!("unknown subcommand {}", subcommand),
     }
 
     Ok(())
