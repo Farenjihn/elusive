@@ -8,7 +8,7 @@ use std::str::FromStr;
 use zstd::Encoder as ZstdEncoder;
 
 /// Represents the compression encoder used for an archive
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub enum Encoder {
     None,
     Gzip,
@@ -74,6 +74,17 @@ mod tests {
             b"datadatadata".to_vec(),
         )
         .build()])
+    }
+
+    #[test]
+    fn test_fromstr() -> Result<()> {
+        assert_eq!(Encoder::from_str("none").unwrap(), Encoder::None);
+        assert_eq!(Encoder::from_str("gzip").unwrap(), Encoder::Gzip);
+        assert_eq!(Encoder::from_str("zstd").unwrap(), Encoder::Zstd);
+
+        assert!(Encoder::from_str("someotherencoder").is_err());
+
+        Ok(())
     }
 
     #[test]

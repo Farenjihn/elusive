@@ -69,21 +69,23 @@ where
         }
     }
 
+    let found = headers
+        .iter()
+        .filter_map(|header| header.data_range(endian, data, strtab, strsz).ok())
+        .flatten()
+        .next();
+
     let mut needed = Vec::new();
 
-    for header in headers {
-        if let Ok(Some(data)) = header.data_range(endian, data, strtab, strsz) {
-            let dynstr = StringTable::new(data, 0, data.len() as u64);
+    if let Some(data) = found {
+        let dynstr = StringTable::new(data, 0, data.len() as u64);
 
-            for offset in offsets {
-                let offset = offset.try_into()?;
-                let name = dynstr.get(offset).expect("offset exists in string table");
-                let path = OsStr::from_bytes(name).to_os_string();
+        for offset in offsets {
+            let offset = offset.try_into()?;
+            let name = dynstr.get(offset).expect("offset exists in string table");
+            let path = OsStr::from_bytes(name).to_os_string();
 
-                needed.push(path);
-            }
-
-            break;
+            needed.push(path);
         }
     }
 

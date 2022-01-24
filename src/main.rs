@@ -1,8 +1,8 @@
 use elusive::config::Config;
 use elusive::encoder::Encoder;
 use elusive::initramfs::InitramfsBuilder;
+use elusive::io::{Input, Output};
 use elusive::microcode::MicrocodeBundle;
-use elusive::utils;
 
 use anyhow::{bail, Result};
 // use clap::{App, AppSettings, Arg, SubCommand};
@@ -62,7 +62,7 @@ enum Command {
 }
 
 /// Entrypoint of the program
-#[cfg(not(tarpaulin_include))]
+#[cfg(not(tarpaulin))]
 fn main() -> Result<()> {
     let env = Env::default().filter_or("RUST_LOG", "info");
     env_logger::init_from_env(env);
@@ -111,13 +111,13 @@ fn main() -> Result<()> {
                 let initramfs = InitramfsBuilder::from_config(config, modules.as_deref())?.build();
 
                 info!("Writing initramfs to: {}", output.display());
-                let write = utils::file_or_stdout(output)?;
+                let write = Output::from_path(output)?;
                 let mut write = BufWriter::new(write);
 
                 if let Some(path) = ucode {
                     info!("Adding microcode bundle from: {}", path.display());
 
-                    let read = utils::file_or_stdin(path)?;
+                    let read = Input::from_path(path)?;
                     let mut read = BufReader::new(read);
 
                     io::copy(&mut read, &mut write)?;
@@ -134,7 +134,7 @@ fn main() -> Result<()> {
                 let bundle = MicrocodeBundle::from_config(config)?;
 
                 info!("Writing microcode cpio to: {}", output.display());
-                let write = utils::file_or_stdout(output)?;
+                let write = Output::from_path(output)?;
                 let write = BufWriter::new(write);
 
                 encoder.encode_archive(bundle.build(), write)?;

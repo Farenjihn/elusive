@@ -468,6 +468,28 @@ impl Initramfs {
     }
 }
 
+fn uncompress_module(data: &[u8], format: &ModuleFormat) -> Result<Vec<u8>> {
+    let mut buf = Vec::new();
+
+    match format {
+        ModuleFormat::Elf => buf.extend(data),
+        ModuleFormat::Zstd => {
+            let mut decoder = ZstdDecoder::new(data)?;
+            decoder.read_to_end(&mut buf)?;
+        }
+        ModuleFormat::Xz => {
+            let mut decoder = XzDecoder::new(data);
+            decoder.read_to_end(&mut buf)?;
+        }
+        ModuleFormat::Gzip => {
+            let mut decoder = GzDecoder::new(data);
+            decoder.read_to_end(&mut buf)?;
+        }
+    }
+
+    Ok(buf)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -551,26 +573,4 @@ mod tests {
 
         Ok(())
     }
-}
-
-fn uncompress_module(data: &[u8], format: &ModuleFormat) -> Result<Vec<u8>> {
-    let mut buf = Vec::new();
-
-    match format {
-        ModuleFormat::Elf => buf.extend(data),
-        ModuleFormat::Zstd => {
-            let mut decoder = ZstdDecoder::new(data)?;
-            decoder.read_to_end(&mut buf)?;
-        }
-        ModuleFormat::Xz => {
-            let mut decoder = XzDecoder::new(data);
-            decoder.read_to_end(&mut buf)?;
-        }
-        ModuleFormat::Gzip => {
-            let mut decoder = GzDecoder::new(data);
-            decoder.read_to_end(&mut buf)?;
-        }
-    }
-
-    Ok(buf)
 }
