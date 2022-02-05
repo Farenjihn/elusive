@@ -1,0 +1,4 @@
+# declare the microcode archive configuration
+# and point the bundler to the proper path
+[microcode]
+amd = "/lib/firmware/amd-ucode"

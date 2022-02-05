@@ -1,0 +1,45 @@
+[initramfs]
+init = "initramfs/basic/init"
+uncompress_modules = true
+
+# -------------------------------
+
+[[initramfs.bin]]
+path = "/bin/busybox"
+
+[[initramfs.bin]]
+path = "/sbin/cryptsetup"
+
+[[initramfs.bin]]
+path = "/usr/bin/lsblk"
+
+# -------------------------------
+
+[[initramfs.lib]]
+path = "/lib64/ld-linux-x86-64.so.2"
+
+# -------------------------------
+
+[[initramfs.tree]]
+path = "/etc"
+copy = [
+    "initramfs/basic/motd",
+]
+
+# -------------------------------
+
+[[initramfs.module]]
+name = "tpm_tis"
+# path = /path/to/out/of/tree/module
+
+[[initramfs.module]]
+name = "tpm_crb"
+
+[[initramfs.module]]
+name = "virtio_pci"
+
+[[initramfs.module]]
+name = "virtio_blk"
+
+[[initramfs.module]]
+name = "squashfs"

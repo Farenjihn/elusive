@@ -1,0 +1,12 @@
+[initramfs]
+init = "initramfs/systemd/init"
+uncompress_modules = true
+
+[[initramfs.module]]
+name = "virtio_pci"
+
+[[initramfs.module]]
+name = "virtio_blk"
+
+[[initramfs.module]]
+name = "squashfs"

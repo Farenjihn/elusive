@@ -1,0 +1,19 @@
+[[initramfs.lib]]
+path = "/usr/lib64/libtss2-esys.so.0"
+
+[[initramfs.lib]]
+path = "/usr/lib64/libtss2-rc.so.0"
+
+[[initramfs.lib]]
+path = "/usr/lib64/libtss2-mu.so.0"
+
+[[initramfs.lib]]
+path = "/usr/lib64/libtss2-tcti-device.so.0"
+
+# -------------------------------
+
+[[initramfs.module]]
+name = "tpm_tis"
+
+[[initramfs.module]]
+name = "tpm_crb"

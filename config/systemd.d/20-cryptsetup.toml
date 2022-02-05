@@ -1,0 +1,86 @@
+[[initramfs.bin]]
+path = "/lib/systemd/systemd-cryptsetup"
+keep_path = true
+
+# -------------------------------
+
+[[initramfs.bin]]
+path = "/sbin/blkid"
+
+[[initramfs.bin]]
+path = "/sbin/dmsetup"
+
+[[initramfs.bin]]
+path = "/sbin/cryptsetup"
+
+[[initramfs.bin]]
+path = "/bin/systemd-tty-ask-password-agent"
+
+# -------------------------------
+
+[[initramfs.bin]]
+path = "/lib/systemd/system-generators/systemd-cryptsetup-generator"
+keep_path = true
+
+# -------------------------------
+
+[[initramfs.lib]]
+path = "/usr/lib/libgcc_s.so.1"
+
+# -------------------------------
+
+[[initramfs.tree]]
+path = "/usr/lib/udev/rules.d"
+copy = [
+    "/lib/udev/rules.d/10-dm.rules",
+    "/lib/udev/rules.d/13-dm-disk.rules",
+    "/lib/udev/rules.d/95-dm-notify.rules",
+    "initramfs/systemd/udev/11-dm-initramfs.rules",
+]
+
+# -------------------------------
+
+[[initramfs.tree]]
+path = "/lib/systemd/system"
+copy = [
+    "/lib/systemd/system/cryptsetup-pre.target",
+    "/lib/systemd/system/cryptsetup.target",
+    "/lib/systemd/system/systemd-ask-password-console.path",
+    "/lib/systemd/system/systemd-ask-password-console.service",
+]
+
+# -------------------------------
+
+[[initramfs.symlink]]
+path = "/lib/systemd/system/sysinit.target.wants/cryptsetup.target"
+link = "../cryptsetup.target"
+
+[[initramfs.symlink]]
+path = "/lib/systemd/system/sysinit.target.wants/systemd-ask-password-console.path"
+link = "../systemd-ask-password-console.path"
+
+# -------------------------------
+
+[[initramfs.module]]
+name = "dm-bufio"
+
+[[initramfs.module]]
+name = "dm-crypt"
+
+[[initramfs.module]]
+name = "ecb"
+
+[[initramfs.module]]
+name = "cbc"
+
+[[initramfs.module]]
+name = "xts"
+
+[[initramfs.module]]
+name = "aesni_intel"
+
+[[initramfs.module]]
+name = "crc32_generic"
+
+[[initramfs.module]]
+name = "crc32c_generic"
