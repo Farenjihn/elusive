@@ -7,7 +7,7 @@ use object::read::elf::{Dyn, FileHeader, ProgramHeader};
 use object::read::FileKind;
 use object::{Endianness, StringTable};
 use std::convert::TryInto;
-use std::ffi::{CStr, CString, OsStr, OsString};
+use std::ffi::{CStr, CString, OsStr};
 use std::fs;
 use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
@@ -30,16 +30,10 @@ pub fn resolve(path: &Path) -> Result<Vec<PathBuf>> {
         }
     }?;
 
-    let mut resolved = Vec::new();
-
-    for lib in needed {
-        walk_linkmap(&lib, &mut resolved)?;
-    }
-
-    Ok(resolved)
+    Ok(needed)
 }
 
-fn elf_needed<T>(elf: &T, data: &[u8]) -> Result<Vec<OsString>>
+fn elf_needed<T>(elf: &T, data: &[u8]) -> Result<Vec<PathBuf>>
 where
     T: FileHeader<Endian = Endianness>,
 {
@@ -83,7 +77,9 @@ where
         for offset in offsets {
             let offset = offset.try_into()?;
             let name = dynstr.get(offset).expect("offset exists in string table");
-            let path = OsStr::from_bytes(name).to_os_string();
+
+            let lib = OsStr::from_bytes(name);
+            let path = find_lib(lib)?;
 
             needed.push(path);
         }
@@ -92,11 +88,18 @@ where
     Ok(needed)
 }
 
-fn walk_linkmap(lib: &OsStr, resolved: &mut Vec<PathBuf>) -> Result<()> {
-    let name = CString::new(lib.as_bytes())?;
+fn find_lib(lib: &OsStr) -> Result<PathBuf> {
     let mut linkmap = MaybeUninit::<*mut link_map>::uninit();
 
+    // most distributions do not include /lib/systemd in ld.so cache
+    let name = if lib.as_bytes().starts_with(b"libsystemd") {
+        CString::new([b"/lib/systemd/", lib.as_bytes()].concat())?
+    } else {
+        CString::new(lib.as_bytes())?
+    };
+
     let handle = unsafe { libc::dlopen(name.as_ptr(), libc::RTLD_LAZY) };
+
     if handle.is_null() {
         let error = unsafe {
             CStr::from_ptr(libc::dlerror())
@@ -121,38 +124,13 @@ fn walk_linkmap(lib: &OsStr, resolved: &mut Vec<PathBuf>) -> Result<()> {
         bail!("dlinfo failed");
     }
 
-    let mut names = Vec::new();
-    unsafe {
-        let mut linkmap = linkmap.assume_init();
-
-        // walk back to the beginning of the link map
-        while !(*linkmap).l_prev.is_null() {
-            linkmap = (*linkmap).l_prev as *mut link_map;
-        }
-
-        // skip first entry in linkmap since its name is empty
-        // next entry is also skipped since it is the vDSO
-        linkmap = (*linkmap).l_next as *mut link_map;
-
-        // walk through the link map and add entries
-        while !(*linkmap).l_next.is_null() {
-            linkmap = (*linkmap).l_next as *mut link_map;
-            names.push(CStr::from_ptr((*linkmap).l_name));
-        }
+    let lname = unsafe {
+        let linkmap = linkmap.assume_init();
+        CStr::from_ptr((*linkmap).l_name)
     };
 
-    for name in names {
-        let path = PathBuf::from(OsStr::from_bytes(name.to_bytes()));
-        resolved.push(path);
-    }
-
-    let ret = unsafe { libc::dlclose(handle) };
-    if ret < 0 {
-        error!("Failed to close handle to dynamic dependency for {:?}", lib);
-        bail!("dlclose failed");
-    }
-
-    Ok(())
+    let path = PathBuf::from(OsStr::from_bytes(lname.to_bytes()));
+    Ok(path)
 }
 
 /// C struct used in `dlinfo` with `RTLD_DI_LINKMAP`
