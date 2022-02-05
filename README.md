@@ -32,10 +32,10 @@ This is probably not useful if you do not want to write your own init script, or
 
 ## Testing
 
-A simple script using `qemu` is included in the repository for quick testing. For now it hardcodes the path to the kernel on Arch Linux but this can be changed if necessary. To use it simply run:
+Testing is implemented using `cargo-make`. To run a flow that will boot up QEMU to test a few generated initramfs, run:
 
 ```sh
-./qemu.sh
+cargo make qemu-flow
 ```
 
-Once in the VM, you can shut it down using `poweroff -f`.
+In order for this to run, you will need to have `qemu` installed, as well as `mksquashfs` and `swtpm`.
