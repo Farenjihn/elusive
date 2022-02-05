@@ -1,4 +1,9 @@
-/target
+target
+**/target
 **/*.rs.bk
-initramfs
-ucode
+**/cobertura.xml
+
+initramfs.basic
+initramfs.systemd
+microcode
+root.squashfs
