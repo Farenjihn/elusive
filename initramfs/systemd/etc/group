@@ -1,0 +1,16 @@
+audio:x:18:
+cdrom:x:19:
+dialout:x:20:
+disk:x:6:
+input:x:97:
+kmem:x:9:
+kvm:x:78:
+lp:x:7:
+optical:x:996:
+render:x:28:
+root:x:0:
+sgx:x:405:
+tape:x:26:
+tty:x:5:
+uucp:x:14:
+video:x:27:
