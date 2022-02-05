@@ -6,7 +6,7 @@ use std::path::Path;
 fn main() -> Result<()> {
     println!("cargo:rustc-link-lib=kmod");
 
-    let builder = Builder::default().header("kmod.h");
+    let builder = Builder::default().header("kmod.h").layout_tests(false);
     let bindings = match builder.generate() {
         Ok(bindings) => bindings,
         Err(_) => bail!("failed to generate bindings"),
