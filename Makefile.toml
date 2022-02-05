@@ -1,0 +1,158 @@
+[env]
+CARGO_MAKE_COVERAGE_PROVIDER = "tarpaulin"
+ELUSIVE_CONFIG = ""
+ELUSIVE_CONFDIR = ""
+
+[tasks.microcode]
+description = "Run elusive to generate a microcode bundle"
+category = "Elusive"
+command = "target/debug/elusive"
+args = [
+    "microcode",
+    "--config",
+    "config/ucode.toml",
+    "--output",
+    "microcode"
+]
+
+[tasks.initramfs]
+description = "Run elusive to generate an initramfs"
+category = "Elusive"
+command = "target/debug/elusive"
+args = [
+    "initramfs",
+    "--config",
+    "${ELUSIVE_CONFIG}",
+    "--confdir",
+    "${ELUSIVE_CONFDIR}",
+    "--ucode",
+    "microcode",
+    "--output",
+    "${ELUSIVE_OUTPUT}",
+]
+
+[tasks.initramfs-basic.env]
+ELUSIVE_OUTPUT = "initramfs.basic"
+ELUSIVE_CONFIG = "config/basic.toml"
+
+[tasks.initramfs-basic]
+description = "Generate a basic initramfs with a custom init script"
+category = "Elusive"
+run_task = "initramfs"
+
+[tasks.initramfs-systemd.env]
+ELUSIVE_OUTPUT = "initramfs.systemd"
+ELUSIVE_CONFIG = "config/systemd.toml"
+ELUSIVE_CONFDIR = "config/systemd.d"
+LD_LIBRARY_PATH = "/lib/systemd"
+
+[tasks.initramfs-systemd]
+description = "Generate a systemd based initramfs"
+category = "Elusive"
+run_task = "initramfs"
+
+[tasks.pre-initramfs-flow]
+category = "Elusive"
+run_task = { name = "build", fork = true }
+
+[tasks.post-initramfs-flow]
+category = "Elusive"
+command = "rm"
+args = ["microcode"]
+
+[tasks.initramfs-flow]
+category = "Elusive"
+workspace = false
+dependencies = [
+    "pre-initramfs-flow",
+    "microcode",
+    "initramfs-basic",
+    "initramfs-systemd",
+    "post-initramfs-flow",
+]
+
+[tasks.mkrootfs]
+category = "Elusive"
+script = '''
+#!/bin/sh
+
+pushd shim
+cargo build
+popd
+
+mkdir -p rootfs/{dev,etc,proc,run,sbin,sys}
+touch rootfs/etc/os-release
+
+cp shim/target/x86_64-unknown-linux-musl/debug/shim rootfs/sbin/init
+
+[ -f root.squashfs ] && rm root.squashfs
+mksquashfs rootfs root.squashfs
+
+rm -r rootfs
+'''
+
+[tasks.qemu]
+description = "Run QEMU to test an initramfs generated with elusive"
+category = "Elusive"
+script = '''
+#!/bin/sh
+
+clean() {
+    [ -f swtpm.state ] && rm swtpm.state
+    [ -e swtpm.sock ] && rm swtpm.sock
+}
+trap clean EXIT
+
+swtpm socket \
+    --tpmstate=backend-uri=file://swtpm.state \
+    --ctrl type=unixio,path=swtpm.sock \
+    --tpm2 &
+
+qemu-system-x86_64 \
+    -machine pc-q35-5.0,accel=kvm \
+    -cpu host \
+    -m 512 \
+    -no-reboot \
+    -nographic \
+    -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+    -drive file=root.squashfs,if=virtio,format=raw \
+    -chardev socket,id=chrtpm,path=swtpm.sock \
+    -tpmdev emulator,id=tpm0,chardev=chrtpm \
+    -device tpm-tis,tpmdev=tpm0 \
+    -kernel /boot/vmlinuz-linux \
+    -initrd ${QEMU_INITRAMFS} \
+    -append "console=ttyS0,115200 panic=-1 root=/dev/vda rootfstype=squashfs systemd.default_timeout_start_sec=15"
+
+ret=$?
+if [ ${ret} -ne 85 ]; then
+    echo "QEMU exited with code=${ret}"
+    exit 1
+fi
+'''
+
+[tasks.qemu-basic.env]
+QEMU_INITRAMFS = "initramfs.basic"
+
+[tasks.qemu-basic]
+description = "Run QEMU to test the systemd based initramfs"
+category = "Elusive"
+run_task = "qemu"
+
+[tasks.qemu-systemd.env]
+QEMU_INITRAMFS = "initramfs.systemd"
+
+[tasks.qemu-systemd]
+description = "Run QEMU to test the systemd based initramfs"
+category = "Elusive"
+run_task = "qemu"
+
+[tasks.qemu-flow]
+description = "Run both elusive and QEMU"
+category = "Elusive"
+workspace = false
+dependencies = [
+    "initramfs-flow",
+    "mkrootfs",
+    "qemu-basic",
+    "qemu-systemd",
+]
