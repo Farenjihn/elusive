@@ -2,37 +2,44 @@
 CARGO_MAKE_COVERAGE_PROVIDER = "tarpaulin"
 ELUSIVE_CONFIG = ""
 ELUSIVE_CONFDIR = ""
+OUTPUT_DIR = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/output"
 
 [tasks.microcode]
 description = "Run elusive to generate a microcode bundle"
 category = "Elusive"
-command = "target/debug/elusive"
+cwd = "elusive"
+command = "cargo"
 args = [
+    "run",
+    "--",
     "microcode",
     "--config",
     "config/ucode.toml",
     "--output",
-    "microcode"
+    "${OUTPUT_DIR}/microcode"
 ]
 
 [tasks.initramfs]
 description = "Run elusive to generate an initramfs"
 category = "Elusive"
-command = "target/debug/elusive"
+cwd = "elusive"
+command = "cargo"
 args = [
+    "run",
+    "--",
     "initramfs",
     "--config",
     "${ELUSIVE_CONFIG}",
     "--confdir",
     "${ELUSIVE_CONFDIR}",
     "--ucode",
-    "microcode",
+    "${OUTPUT_DIR}/microcode",
     "--output",
     "${ELUSIVE_OUTPUT}",
 ]
 
 [tasks.initramfs-basic.env]
-ELUSIVE_OUTPUT = "initramfs.basic"
+ELUSIVE_OUTPUT = "${OUTPUT_DIR}/initramfs.basic"
 ELUSIVE_CONFIG = "config/basic.toml"
 
 [tasks.initramfs-basic]
@@ -41,7 +48,7 @@ category = "Elusive"
 run_task = "initramfs"
 
 [tasks.initramfs-systemd.env]
-ELUSIVE_OUTPUT = "initramfs.systemd"
+ELUSIVE_OUTPUT = "${OUTPUT_DIR}/initramfs.systemd"
 ELUSIVE_CONFIG = "config/systemd.toml"
 ELUSIVE_CONFDIR = "config/systemd.d"
 LD_LIBRARY_PATH = "/lib/systemd"
@@ -51,14 +58,24 @@ description = "Generate a systemd based initramfs"
 category = "Elusive"
 run_task = "initramfs"
 
-[tasks.pre-initramfs-flow]
+[tasks.pre-initramfs-mkdir]
+category = "Elusive"
+command = "mkdir"
+args = [
+    "-p",
+    "${OUTPUT_DIR}",
+]
+
+[tasks.pre-initramfs-build]
 category = "Elusive"
 run_task = { name = "build", fork = true }
 
-[tasks.post-initramfs-flow]
+[tasks.pre-initramfs-flow]
 category = "Elusive"
-command = "rm"
-args = ["microcode"]
+dependencies = [
+    "pre-initramfs-mkdir",
+    "pre-initramfs-build",
+]
 
 [tasks.initramfs-flow]
 category = "Elusive"
@@ -68,7 +85,6 @@ dependencies = [
     "microcode",
     "initramfs-basic",
     "initramfs-systemd",
-    "post-initramfs-flow",
 ]
 
 [tasks.mkrootfs]
@@ -76,19 +92,24 @@ category = "Elusive"
 script = '''
 #!/bin/sh
 
+set -e
+
 pushd shim
 cargo build
 popd
 
-mkdir -p rootfs/{dev,etc,proc,run,sbin,sys}
-touch rootfs/etc/os-release
+rootfs="${OUTPUT_DIR}/rootfs"
+squashfs="${OUTPUT_DIR}/root.squashfs"
 
-cp shim/target/x86_64-unknown-linux-musl/debug/shim rootfs/sbin/init
+mkdir -p ${rootfs}/{dev,etc,proc,run,sbin,sys}
+touch ${rootfs}/etc/os-release
 
-[ -f root.squashfs ] && rm root.squashfs
-mksquashfs rootfs root.squashfs
+cp shim/target/x86_64-unknown-linux-musl/debug/shim ${rootfs}/sbin/init
 
-rm -r rootfs
+[ -f ${squashfs} ] && rm ${squashfs}
+mksquashfs ${rootfs} ${squashfs}
+
+rm -r ${rootfs}
 '''
 
 [tasks.qemu]
@@ -114,11 +135,11 @@ qemu-system-x86_64 \
     -m 512 \
     -no-reboot \
     -nographic \
-    -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
-    -drive file=root.squashfs,if=virtio,format=raw \
     -chardev socket,id=chrtpm,path=swtpm.sock \
     -tpmdev emulator,id=tpm0,chardev=chrtpm \
     -device tpm-tis,tpmdev=tpm0 \
+    -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+    -drive file=${OUTPUT_DIR}/root.squashfs,if=virtio,format=raw \
     -kernel /boot/vmlinuz-linux \
     -initrd ${QEMU_INITRAMFS} \
     -append "console=ttyS0,115200 panic=-1 root=/dev/vda rootfstype=squashfs systemd.default_timeout_start_sec=15"
@@ -131,7 +152,7 @@ fi
 '''
 
 [tasks.qemu-basic.env]
-QEMU_INITRAMFS = "initramfs.basic"
+QEMU_INITRAMFS = "${OUTPUT_DIR}/initramfs.basic"
 
 [tasks.qemu-basic]
 description = "Run QEMU to test the systemd based initramfs"
@@ -139,7 +160,7 @@ category = "Elusive"
 run_task = "qemu"
 
 [tasks.qemu-systemd.env]
-QEMU_INITRAMFS = "initramfs.systemd"
+QEMU_INITRAMFS = "${OUTPUT_DIR}/initramfs.systemd"
 
 [tasks.qemu-systemd]
 description = "Run QEMU to test the systemd based initramfs"

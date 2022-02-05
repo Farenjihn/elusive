@@ -2,8 +2,4 @@ target
 **/target
 **/*.rs.bk
 **/cobertura.xml
-
-initramfs.basic
-initramfs.systemd
-microcode
-root.squashfs
+output

@@ -1,0 +1,40 @@
+[package]
+name = "elusive"
+version = "0.7.0"
+authors = ["Valentin Finini <farenjihn@gmail.com>"]
+description = "A custom initramfs generator"
+license = "GPL-3.0"
+repository = "https://github.com/Farenjihn/elusive"
+edition = "2021"
+
+[[bin]]
+name = "elusive"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.53"
+env_logger = "0.9.0"
+flate2 = "1.0.22"
+libc = "0.2.117"
+log = "0.4.14"
+thiserror = "1.0.30"
+toml = "0.5.8"
+walkdir = "2.3.2"
+xz2 = "0.1.6"
+zstd = "0.10.0"
+
+[dependencies.clap]
+version = "3.0.14"
+features = ["derive"]
+
+[dependencies.object]
+version = "0.28.3"
+default-features = false
+features = ["elf", "read_core", "std"]
+
+[dependencies.serde]
+version = "1.0.136"
+features = ["derive"]
+
+[dependencies.kmod-sys]
+path = "../kmod-sys"
