@@ -108,19 +108,3 @@ pub struct Module {
     /// Path to the kernel module, useful for out of tree modules
     pub path: Option<PathBuf>,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use anyhow::Result;
-    use std::fs;
-
-    #[test]
-    fn test_config() -> Result<()> {
-        let data = fs::read("example.toml")?;
-        toml::from_slice::<Config>(&data)?;
-
-        Ok(())
-    }
-}
