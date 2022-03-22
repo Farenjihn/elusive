@@ -5,7 +5,7 @@ use crate::io::{Input, Output};
 use crate::microcode::MicrocodeBundle;
 
 use anyhow::{bail, Result};
-use clap::{AppSettings, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use log::{error, info};
 use std::fs::File;
 use std::io::Read;
@@ -19,7 +19,6 @@ const CONFDIR_PATH: &str = "/etc/elusive.d";
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
-#[clap(setting(AppSettings::SubcommandRequiredElseHelp))]
 pub struct Args {
     /// Path to the configuration file
     #[clap(short, long)]
