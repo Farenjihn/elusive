@@ -292,7 +292,9 @@ impl InitramfsBuilder {
             self.mkdir_all(parent);
         }
 
-        info!("Adding symlink: {} -> {}", path.display(), link.display());
+        info!("Adding symlink:");
+        info!("├── source = {}", path.display());
+        info!("└── target = {}", link.display());
         let entry = EntryBuilder::symlink(path, link)
             .mode(DEFAULT_SYMLINK_MODE)
             .build();
