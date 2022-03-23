@@ -9,33 +9,6 @@ fn dev_null() -> PathBuf {
 }
 
 #[test]
-fn test_empty_config() -> Result<()> {
-    let args = Args {
-        config: None,
-        confdir: None,
-        encoder: None,
-        command: Command::Microcode { output: dev_null() },
-    };
-
-    assert!(cli::elusive(args).is_err());
-
-    let args = Args {
-        config: None,
-        confdir: None,
-        encoder: None,
-        command: Command::Initramfs {
-            ucode: None,
-            modules: None,
-            output: dev_null(),
-        },
-    };
-
-    assert!(cli::elusive(args).is_err());
-
-    Ok(())
-}
-
-#[test]
 fn test_microcode() -> Result<()> {
     let args = Args {
         config: Some(PathBuf::from("config/ucode.toml")),
