@@ -12,19 +12,19 @@ name = "elusive"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.56"
+anyhow = "1.0.57"
 env_logger = "0.9.0"
-flate2 = "1.0.22"
-libc = "0.2.121"
+flate2 = "1.0.23"
+libc = "0.2.124"
 log = "0.4.16"
 thiserror = "1.0.30"
-toml = "0.5.8"
+toml = "0.5.9"
 walkdir = "2.3.2"
 xz2 = "0.1.6"
 zstd = "0.11.1"
 
 [dependencies.clap]
-version = "3.1.6"
+version = "3.1.12"
 features = ["derive"]
 
 [dependencies.object]
