@@ -140,7 +140,7 @@ qemu-system-x86_64 \
     -device tpm-tis,tpmdev=tpm0 \
     -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
     -drive file=${OUTPUT_DIR}/root.squashfs,if=virtio,format=raw \
-    -kernel /boot/vmlinuz-linux \
+    -kernel vmlinuz \
     -initrd ${QEMU_INITRAMFS} \
     -append "console=ttyS0,115200 panic=-1 root=/dev/vda rootfstype=squashfs systemd.default_timeout_start_sec=15"
 
