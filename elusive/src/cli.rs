@@ -46,6 +46,9 @@ pub enum Command {
         /// Path to the kernel module source directory
         #[clap(short, long)]
         modules: Option<PathBuf>,
+        /// Kernel release name to overwrite output folder name for kernel modules
+        #[clap(short, long)]
+        kernel_release: Option<String>,
         /// Path where the initramfs will be written
         #[clap(short, long)]
         output: PathBuf,
@@ -103,9 +106,15 @@ pub fn elusive(args: Args) -> Result<()> {
             ucode,
             modules,
             output,
+            kernel_release,
         } => {
             if let Some(config) = config.initramfs {
-                let initramfs = InitramfsBuilder::from_config(config, modules.as_deref())?.build();
+                let initramfs = InitramfsBuilder::from_config(
+                    config,
+                    modules.as_deref(),
+                    kernel_release.as_deref(),
+                )?
+                .build();
 
                 info!("Writing initramfs to: {}", output.display());
                 let write = Output::from_path(output)?;

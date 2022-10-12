@@ -79,7 +79,11 @@ impl InitramfsBuilder {
 
     /// Create a new builder from a configuration, optionally providing
     /// a source directory for kernel modules
-    pub fn from_config(config: config::Initramfs, module_dir: Option<&Path>) -> Result<Self> {
+    pub fn from_config(
+        config: config::Initramfs,
+        module_dir: Option<&Path>,
+        kernel_release: Option<&str>,
+    ) -> Result<Self> {
         let mut builder = InitramfsBuilder::new()?;
         builder.add_init(&config.init)?;
 
@@ -127,9 +131,19 @@ impl InitramfsBuilder {
 
             for module in modules {
                 if let Some(path) = module.path {
-                    builder.add_module_from_path(&mut kmod, &path, config.uncompress_modules)?;
+                    builder.add_module_from_path(
+                        &mut kmod,
+                        &path,
+                        config.uncompress_modules,
+                        kernel_release,
+                    )?;
                 } else if let Some(name) = module.name {
-                    builder.add_module_from_name(&mut kmod, &name, config.uncompress_modules)?;
+                    builder.add_module_from_name(
+                        &mut kmod,
+                        &name,
+                        config.uncompress_modules,
+                        kernel_release,
+                    )?;
                 } else {
                     bail!("invalid kernel module configuration, one of 'name' or 'path' must be specified");
                 }
@@ -311,11 +325,12 @@ impl InitramfsBuilder {
         kmod: &mut Kmod,
         name: &str,
         uncompress: bool,
+        kernel_release: Option<&str>,
     ) -> Result<()> {
         let module = kmod.module_from_name(name)?;
 
         info!("Adding module with name: {}", name);
-        self.add_module(kmod, module, uncompress)?;
+        self.add_module(kmod, module, uncompress, kernel_release)?;
 
         Ok(())
     }
@@ -326,11 +341,12 @@ impl InitramfsBuilder {
         kmod: &mut Kmod,
         path: &Path,
         uncompress: bool,
+        kernel_release: Option<&str>,
     ) -> Result<()> {
         let module = kmod.module_from_path(path)?;
 
         info!("Adding module from path: {}", path.display());
-        self.add_module(kmod, module, uncompress)?;
+        self.add_module(kmod, module, uncompress, kernel_release)?;
 
         Ok(())
     }
@@ -393,8 +409,21 @@ impl InitramfsBuilder {
     }
 
     /// Add a module to the initramfs
-    fn add_module(&mut self, kmod: &mut Kmod, module: Module, uncompress: bool) -> Result<()> {
-        self.mkdir_all(&kmod.dir().join("kernel"));
+    fn add_module(
+        &mut self,
+        kmod: &mut Kmod,
+        module: Module,
+        uncompress: bool,
+        kernel_release: Option<&str>,
+    ) -> Result<()> {
+        let kmod_dir = if let Some(kernel_release) = kernel_release {
+            Path::new("/lib/modules")
+                .join(kernel_release)
+                .join("kernel")
+        } else {
+            kmod.dir().join("kernel")
+        };
+        self.mkdir_all(&kmod_dir);
         let path = module.path()?;
 
         if self.cache.contains(path) {
@@ -416,7 +445,7 @@ impl InitramfsBuilder {
             (filename, data)
         };
 
-        let entry = EntryBuilder::file(kmod.dir().join("kernel").join(filename), data)
+        let entry = EntryBuilder::file(kmod_dir.join(filename), data)
             .with_metadata(&metadata)
             .build();
 
@@ -431,7 +460,7 @@ impl InitramfsBuilder {
             .chain(info.post_softdeps())
         {
             let module = kmod.module_from_name(name)?;
-            self.add_module(kmod, module, uncompress)?;
+            self.add_module(kmod, module, uncompress, kernel_release)?;
         }
 
         Ok(())
@@ -544,7 +573,7 @@ mod tests {
         let btrfs = kmod.module_from_name("btrfs")?;
 
         if btrfs.path().is_ok() {
-            builder.add_module(&mut kmod, btrfs, false)?;
+            builder.add_module(&mut kmod, btrfs, false, None)?;
             module.push(config::Module {
                 name: Some("btrfs".to_string()),
                 path: None,
@@ -568,7 +597,7 @@ mod tests {
 
         assert_eq!(
             builder.build().into_archive(),
-            InitramfsBuilder::from_config(config, None)?
+            InitramfsBuilder::from_config(config, None, None)?
                 .build()
                 .into_archive(),
         );
