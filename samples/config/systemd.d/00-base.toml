@@ -98,11 +98,11 @@ path = "/lib64/libnss_files.so.2"
 [[initramfs.tree]]
 path = "/etc"
 copy = [
-    "initramfs/systemd/etc/initrd-release",
-    "initramfs/systemd/etc/group",
-    "initramfs/systemd/etc/passwd",
-    "initramfs/systemd/etc/shadow",
-    "initramfs/systemd/etc/nsswitch.conf",
+    "files/systemd/etc/initrd-release",
+    "files/systemd/etc/group",
+    "files/systemd/etc/passwd",
+    "files/systemd/etc/shadow",
+    "files/systemd/etc/nsswitch.conf",
 ]
 
 # -------------------------------

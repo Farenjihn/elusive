@@ -1,5 +1,5 @@
 [initramfs]
-init = "initramfs/basic/init"
+init = "files/basic/init"
 uncompress_modules = true
 
 # -------------------------------
@@ -23,7 +23,7 @@ path = "/lib64/ld-linux-x86-64.so.2"
 [[initramfs.tree]]
 path = "/etc"
 copy = [
-    "initramfs/basic/motd",
+    "files/basic/motd",
 ]
 
 # -------------------------------

@@ -32,10 +32,10 @@ This is probably not useful if you do not want to write your own init script, or
 
 ## Testing
 
-Testing is implemented using `cargo-make`. To run a flow that will boot up QEMU to test a few generated initramfs, run:
+Testing is implemented using scripts. To run a flow that will boot up QEMU to test a few generated initramfs, run:
 
 ```sh
-cargo make qemu-flow
+hack/build.sh && hack/qemu.sh
 ```
 
 In order for this to run, you will need to have `qemu` installed, as well as `mksquashfs` and `swtpm`.

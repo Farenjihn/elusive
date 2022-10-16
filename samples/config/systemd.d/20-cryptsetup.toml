@@ -35,7 +35,7 @@ copy = [
     "/lib/udev/rules.d/10-dm.rules",
     "/lib/udev/rules.d/13-dm-disk.rules",
     "/lib/udev/rules.d/95-dm-notify.rules",
-    "initramfs/systemd/udev/11-dm-initramfs.rules",
+    "files/systemd/udev/11-dm-initramfs.rules",
 ]
 
 # -------------------------------

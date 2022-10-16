@@ -1,5 +1,5 @@
 [initramfs]
-init = "initramfs/systemd/init"
+init = "files/systemd/init"
 uncompress_modules = true
 
 [[initramfs.module]]
