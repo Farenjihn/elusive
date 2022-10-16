@@ -54,6 +54,7 @@ impl Archive {
 }
 
 /// Represent the name of a cpio entry
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(PartialEq, Default)]
 pub struct EntryName {
     name: Vec<u8>,
@@ -95,6 +96,7 @@ impl fmt::Debug for EntryName {
 }
 
 /// Wrapper type for data
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(PartialEq)]
 pub struct EntryData {
     data: Vec<u8>,

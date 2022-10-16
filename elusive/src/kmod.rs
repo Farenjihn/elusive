@@ -30,6 +30,10 @@ pub enum KmodError {
     ModuleGetInfoFailed(String),
     #[error("the module handle for '{0}' is invalid, you may need to override the kernel release")]
     InvalidModuleHandle(String),
+    #[error("the data is too small for magic detection")]
+    TooSmallForMagic,
+    #[error("unknown magic number")]
+    UnknownMagic,
 }
 
 pub struct Kmod {
@@ -291,7 +295,7 @@ pub enum ModuleFormat {
 impl ModuleFormat {
     pub fn from_bytes(data: &[u8]) -> Result<Self> {
         if data.len() < MIN_BYTES_LEN {
-            bail!("data is too small to detect file magic");
+            bail!(KmodError::TooSmallForMagic);
         }
 
         if data[..4] == ELF_MAGIC {
@@ -310,7 +314,7 @@ impl ModuleFormat {
             return Ok(ModuleFormat::Gzip);
         }
 
-        bail!("unknown magic number");
+        bail!(KmodError::UnknownMagic);
     }
 
     pub fn extension(&self) -> &str {

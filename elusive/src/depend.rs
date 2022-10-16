@@ -12,6 +12,17 @@ use std::fs;
 use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum DependError {
+    #[error("only 64bit elf binaries are supported")]
+    Not64BitElf,
+    #[error("dlopen failed: {0}")]
+    DlopenError(String),
+    #[error("dlinfo failed")]
+    DlinfoError,
+}
 
 pub fn resolve(path: &Path) -> Result<Vec<PathBuf>> {
     let data = fs::read(path)?;
@@ -26,7 +37,7 @@ pub fn resolve(path: &Path) -> Result<Vec<PathBuf>> {
         }
         _ => {
             error!("Failed to parse binary");
-            bail!("only 64bit elf files are supported");
+            bail!(DependError::Not64BitElf);
         }
     }?;
 
@@ -108,7 +119,7 @@ fn find_lib(lib: &OsStr) -> Result<PathBuf> {
         };
 
         error!("Failed to open handle to dynamic dependency for {:?}", lib);
-        bail!("dlopen failed: {}", error);
+        bail!(DependError::DlopenError(error.to_string()));
     }
 
     let ret = unsafe {
@@ -121,7 +132,7 @@ fn find_lib(lib: &OsStr) -> Result<PathBuf> {
 
     if ret < 0 {
         error!("Failed to get path to dynamic dependency for {:?}", lib);
-        bail!("dlinfo failed");
+        bail!(DependError::DlinfoError);
     }
 
     let lname = unsafe {

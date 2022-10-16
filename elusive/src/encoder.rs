@@ -5,9 +5,17 @@ use flate2::write::GzEncoder;
 use flate2::Compression;
 use std::io::Write;
 use std::str::FromStr;
+use thiserror::Error;
 use zstd::Encoder as ZstdEncoder;
 
+#[derive(Error, Debug)]
+pub enum EncoderError {
+    #[error("unknown encoder: {0}")]
+    ConversionFailed(String),
+}
+
 /// Represents the compression encoder used for an archive
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(PartialEq, Debug)]
 pub enum Encoder {
     None,
@@ -57,7 +65,7 @@ impl FromStr for Encoder {
             "none" => Ok(Encoder::None),
             "gzip" => Ok(Encoder::Gzip),
             "zstd" => Ok(Encoder::Zstd),
-            other => bail!("unknown encoder: {}", other),
+            other => bail!(EncoderError::ConversionFailed(other.to_string())),
         }
     }
 }

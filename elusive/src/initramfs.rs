@@ -12,9 +12,10 @@ use anyhow::{bail, Result};
 use flate2::read::GzDecoder;
 use log::{error, info};
 use std::collections::HashSet;
-use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::{fs, io};
+use thiserror::Error;
 use walkdir::WalkDir;
 use xz2::read::XzDecoder;
 use zstd::Decoder as ZstdDecoder;
@@ -37,6 +38,12 @@ const ROOT_SYMLINKS: [(&str, &str); 7] = [
 
 const DEFAULT_DIR_MODE: u32 = 0o040_000 + 0o755;
 const DEFAULT_SYMLINK_MODE: u32 = 0o120_000;
+
+#[derive(Error, Debug)]
+pub enum InitramfsError {
+    #[error("invalid kernel module configuration, one of 'name' or 'path' must be specified")]
+    InvalidModuleConfiguration,
+}
 
 /// Builder for initramfs generation
 pub struct InitramfsBuilder {
@@ -118,10 +125,10 @@ impl InitramfsBuilder {
         if let Some(modules) = config.module {
             let mut kmod = if let Some(path) = module_dir {
                 if !path.exists() {
-                    bail!(
-                        "invalid kernel module directory, '{}' does not exist",
-                        path.display()
-                    );
+                    bail!(io::Error::new(
+                        io::ErrorKind::NotFound,
+                        path.display().to_string(),
+                    ));
                 }
 
                 Kmod::with_directory(path)
@@ -145,7 +152,7 @@ impl InitramfsBuilder {
                         kernel_release,
                     )?;
                 } else {
-                    bail!("invalid kernel module configuration, one of 'name' or 'path' must be specified");
+                    bail!(InitramfsError::InvalidModuleConfiguration);
                 }
             }
         }
@@ -227,7 +234,10 @@ impl InitramfsBuilder {
         for tree in copy {
             if !tree.exists() {
                 error!("Failed to find tree: {}", tree.display());
-                bail!("tree not found: {}", tree.display());
+                bail!(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    tree.display().to_string()
+                ));
             }
 
             let metadata = fs::metadata(&tree)?;
@@ -363,7 +373,10 @@ impl InitramfsBuilder {
     fn add_entrypoint(&mut self, name: &str, path: &Path) -> Result<()> {
         if !path.exists() {
             error!("Failed to find {}: {}", name, path.display());
-            bail!("{} not found: {}", name, path.display());
+            bail!(io::Error::new(
+                io::ErrorKind::NotFound,
+                path.display().to_string()
+            ));
         }
 
         let metadata = fs::metadata(&path)?;
@@ -383,14 +396,20 @@ impl InitramfsBuilder {
     fn add_elf(&mut self, path: &Path, dest: &Path) -> Result<()> {
         if !path.exists() {
             error!("Failed to find binary: {}", path.display());
-            bail!("binary not found: {}", path.display());
+            bail!(io::Error::new(
+                io::ErrorKind::NotFound,
+                path.display().to_string()
+            ));
         }
 
         let filename = match path.file_name() {
             Some(filename) => filename,
             None => {
                 error!("Failed to get filename for binary: {}", path.display());
-                bail!("filename not found in path: {}", path.display());
+                bail!(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    path.display().to_string()
+                ));
             }
         };
 

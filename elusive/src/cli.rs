@@ -12,10 +12,19 @@ use std::io::Read;
 use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
 use std::{fs, io};
+use thiserror::Error;
 
 /// Default path for the config file
 const CONFIG_PATH: &str = "/etc/elusive.toml";
 const CONFDIR_PATH: &str = "/etc/elusive.d";
+
+#[derive(Error, Debug)]
+pub enum ConfigurationError {
+    #[error("no configuration was found in either {0} or {1}")]
+    EmptyConfiguration(String, String),
+    #[error("provided configuration is invalid for the current subcommand")]
+    InvalidConfiguration,
+}
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -92,11 +101,10 @@ pub fn elusive(args: Args) -> Result<()> {
     }
 
     if buf.is_empty() {
-        bail!(
-            "configuration was file or directory was found in {}, {}",
-            config.display(),
-            confdir.display(),
-        );
+        bail!(ConfigurationError::EmptyConfiguration(
+            config.display().to_string(),
+            confdir.display().to_string()
+        ));
     }
 
     let config: Config = toml::from_slice(&buf)?;
@@ -132,7 +140,7 @@ pub fn elusive(args: Args) -> Result<()> {
                 encoder.encode_archive(initramfs.into_archive(), write)?;
             } else {
                 error!("No configuration provided for initramfs generation");
-                bail!("configuration was empty");
+                bail!(ConfigurationError::InvalidConfiguration);
             }
         }
         Command::Microcode { output } => {
@@ -146,7 +154,7 @@ pub fn elusive(args: Args) -> Result<()> {
                 encoder.encode_archive(bundle.build(), write)?;
             } else {
                 error!("No configuration provided for microcode generation");
-                bail!("configuration was empty");
+                bail!(ConfigurationError::InvalidConfiguration);
             }
         }
     }
