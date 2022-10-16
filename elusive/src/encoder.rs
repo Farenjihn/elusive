@@ -16,7 +16,7 @@ pub enum EncoderError {
 
 /// Represents the compression encoder used for an archive
 #[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Encoder {
     None,
     Gzip,
