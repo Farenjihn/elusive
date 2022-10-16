@@ -37,6 +37,11 @@ pub struct Args {
     #[clap(short = 'C', long)]
     #[clap(global = true)]
     pub confdir: Option<PathBuf>,
+    /// Do not read configuration from default paths
+    #[clap(long)]
+    #[clap(default_value_t = false)]
+    #[clap(global = true)]
+    pub skip_default_paths: bool,
     #[clap(short, long)]
     #[clap(global = true)]
     /// Encoder to use for compression
@@ -77,10 +82,25 @@ pub fn elusive(args: Args) -> Result<()> {
         confdir,
         encoder,
         command,
+        skip_default_paths,
     } = args;
 
-    let config = config.unwrap_or_else(|| PathBuf::from(CONFIG_PATH));
-    let confdir = confdir.unwrap_or_else(|| PathBuf::from(CONFDIR_PATH));
+    let config = config.unwrap_or_else(|| {
+        if skip_default_paths {
+            PathBuf::from("/dev/null")
+        } else {
+            PathBuf::from(CONFIG_PATH)
+        }
+    });
+
+    let confdir = confdir.unwrap_or_else(|| {
+        if skip_default_paths {
+            PathBuf::from("/dev/null")
+        } else {
+            PathBuf::from(CONFDIR_PATH)
+        }
+    });
+
     let encoder = encoder.unwrap_or(Encoder::Zstd);
 
     let mut buf = Vec::new();

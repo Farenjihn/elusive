@@ -77,20 +77,21 @@ mkdir -p "${OUTPUT_DIR}"
 pushd samples > /dev/null
 
 elusive microcode \
+    --skip-default-paths \
     --config config/ucode.toml \
-    --confdir "" \
     --output "${OUTPUT_DIR}/microcode"
 
 # build both initramfs archives
 elusive initramfs \
+    --skip-default-paths \
     --config config/basic.toml \
-    --confdir "" \
     --modules "${MODULES_DIR}" \
     --ucode "${OUTPUT_DIR}/microcode" \
     --output "${OUTPUT_DIR}/initramfs.basic"
 
 export LD_LIBRARY_PATH="/lib/systemd"
 elusive initramfs \
+    --skip-default-paths \
     --config config/systemd.toml \
     --confdir config/systemd.d \
     --modules "${MODULES_DIR}" \
