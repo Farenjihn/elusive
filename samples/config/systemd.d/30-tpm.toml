@@ -1,6 +1,5 @@
 [[initramfs.lib]]
 path = "/usr/lib64/cryptsetup/libcryptsetup-token-systemd-tpm2.so"
-keep_path = true
 
 [[initramfs.lib]]
 path = "/usr/lib64/libtss2-esys.so.0"
