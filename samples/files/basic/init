@@ -10,8 +10,6 @@ cat /etc/motd
 
 mdev -sd
 
-modprobe tpm_tis
-modprobe tpm_crb
 modprobe virtio_pci
 modprobe virtio_blk
 modprobe squashfs

@@ -1,5 +1,12 @@
 [[initramfs.lib]]
+path = "/usr/lib64/cryptsetup/libcryptsetup-token-systemd-tpm2.so"
+keep_path = true
+
+[[initramfs.lib]]
 path = "/usr/lib64/libtss2-esys.so.0"
+
+[[initramfs.lib]]
+path = "/usr/lib64/libtss2-sys.so.1"
 
 [[initramfs.lib]]
 path = "/usr/lib64/libtss2-rc.so.0"
@@ -9,11 +16,3 @@ path = "/usr/lib64/libtss2-mu.so.0"
 
 [[initramfs.lib]]
 path = "/usr/lib64/libtss2-tcti-device.so.0"
-
-# -------------------------------
-
-[[initramfs.module]]
-name = "tpm_tis"
-
-[[initramfs.module]]
-name = "tpm_crb"

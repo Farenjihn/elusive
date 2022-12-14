@@ -28,12 +28,11 @@ copy = [
 
 # -------------------------------
 
-[[initramfs.module]]
-name = "tpm_tis"
-# path = /path/to/out/of/tree/module
-
-[[initramfs.module]]
-name = "tpm_crb"
+# [[initramfs.module]]
+# name = "tpm_tis"
+#
+# [[initramfs.module]]
+# name = "tpm_crb"
 
 [[initramfs.module]]
 name = "virtio_pci"
