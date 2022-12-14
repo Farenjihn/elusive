@@ -25,6 +25,10 @@
 use serde::Deserialize;
 use std::path::PathBuf;
 
+fn default_as_true() -> bool {
+    true
+}
+
 /// Top-level configuration structure
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -72,6 +76,10 @@ pub struct Binary {
 pub struct Library {
     /// The path where the library can be found
     pub path: PathBuf,
+    /// Whether to keep the original path, if false
+    /// the binary will be placed in /usr/lib
+    #[serde(default = "default_as_true")]
+    pub keep_path: bool,
 }
 
 /// Microcode generation configuration

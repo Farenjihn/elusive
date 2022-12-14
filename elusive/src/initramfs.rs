@@ -106,7 +106,7 @@ impl InitramfsBuilder {
 
         if let Some(libraries) = config.lib {
             for library in libraries {
-                builder.add_library(&library.path)?;
+                builder.add_library(&library.path, library.keep_path)?;
             }
         }
 
@@ -192,7 +192,8 @@ impl InitramfsBuilder {
         }
 
         let dest = if keep_path {
-            path.parent().unwrap_or_else(|| Path::new("/usr/bin"))
+            path.parent()
+                .expect("parent path exists when keep_path set to true")
         } else {
             Path::new("/usr/bin")
         };
@@ -202,23 +203,31 @@ impl InitramfsBuilder {
         self.add_elf(path, dest)?;
 
         for dependency in depend::resolve(path)? {
-            self.add_library(&dependency)?;
+            self.add_library(&dependency, true)?;
         }
 
         Ok(())
     }
 
     /// Add the library from the provided path to the initramfs
-    pub fn add_library(&mut self, path: &Path) -> Result<()> {
+    pub fn add_library(&mut self, path: &Path, keep_path: bool) -> Result<()> {
         if self.cache.contains(path) {
             return Ok(());
         }
 
+        let dest = if keep_path {
+            path.parent()
+                .expect("parent path exists when keep_path set to true")
+        } else {
+            Path::new("/usr/lib")
+        };
+
         info!("Adding library: {}", path.display());
-        self.add_elf(path, Path::new("/usr/lib"))?;
+        self.mkdir_all(dest);
+        self.add_elf(path, dest)?;
 
         for dependency in depend::resolve(path)? {
-            self.add_library(&dependency)?;
+            self.add_library(&dependency, true)?;
         }
 
         Ok(())
@@ -240,18 +249,18 @@ impl InitramfsBuilder {
                 ));
             }
 
-            let metadata = fs::metadata(&tree)?;
+            let metadata = fs::metadata(tree)?;
             let ty = metadata.file_type();
 
             if ty.is_dir() {
-                let walk = WalkDir::new(&tree).min_depth(1);
+                let walk = WalkDir::new(tree).min_depth(1);
 
                 for entry in walk {
                     let entry = entry?;
 
                     let path = entry.path();
                     let name = dest.join(
-                        path.strip_prefix(&tree)
+                        path.strip_prefix(tree)
                             .expect("entry should be under root path"),
                     );
 
@@ -265,10 +274,10 @@ impl InitramfsBuilder {
                     let builder = if ty.is_dir() {
                         EntryBuilder::directory(&name)
                     } else if ty.is_file() {
-                        let data = fs::read(&path)?;
+                        let data = fs::read(path)?;
                         EntryBuilder::file(&name, data)
                     } else if ty.is_symlink() {
-                        let data = fs::read_link(&path)?;
+                        let data = fs::read_link(path)?;
                         EntryBuilder::symlink(&name, &data)
                     } else {
                         EntryBuilder::special_file(&name)
@@ -287,10 +296,10 @@ impl InitramfsBuilder {
                 }
 
                 let builder = if ty.is_file() {
-                    let data = fs::read(&tree)?;
+                    let data = fs::read(tree)?;
                     EntryBuilder::file(&name, data)
                 } else if ty.is_symlink() {
-                    let data = fs::read_link(&tree)?;
+                    let data = fs::read_link(tree)?;
                     EntryBuilder::symlink(&name, &data)
                 } else {
                     EntryBuilder::special_file(&name)
@@ -379,8 +388,8 @@ impl InitramfsBuilder {
             ));
         }
 
-        let metadata = fs::metadata(&path)?;
-        let data = fs::read(&path)?;
+        let metadata = fs::metadata(path)?;
+        let data = fs::read(path)?;
 
         let entry = EntryBuilder::file(format!("/{}", name), data)
             .with_metadata(&metadata)
@@ -414,8 +423,8 @@ impl InitramfsBuilder {
         };
 
         let name = dest.join(filename);
-        let metadata = fs::metadata(&path)?;
-        let data = fs::read(&path)?;
+        let metadata = fs::metadata(path)?;
+        let data = fs::read(path)?;
 
         let entry = EntryBuilder::file(name, data)
             .with_metadata(&metadata)
