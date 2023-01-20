@@ -18,17 +18,17 @@ flate2 = "1.0.25"
 libc = "0.2.139"
 log = "0.4.17"
 thiserror = "1.0.38"
-toml = "0.5.10"
+toml = "0.5.11"
 walkdir = "2.3.2"
 xz2 = "0.1.7"
-zstd = "0.12.1"
+zstd = "0.12.2+zstd.1.5.2"
 
 [dependencies.clap]
-version = "4.0.32"
+version = "4.1.1"
 features = ["derive"]
 
 [dependencies.object]
-version = "0.30.0"
+version = "0.30.2"
 default-features = false
 features = ["elf", "read_core", "std"]
 
