@@ -103,10 +103,10 @@ pub fn elusive(args: Args) -> Result<()> {
 
     let encoder = encoder.unwrap_or(Encoder::Zstd);
 
-    let mut buf = Vec::new();
+    let mut buf = String::new();
 
     if config.exists() && config.is_file() {
-        File::open(&config)?.read_to_end(&mut buf)?;
+        File::open(&config)?.read_to_string(&mut buf)?;
     }
 
     if confdir.exists() && confdir.is_dir() {
@@ -115,7 +115,7 @@ pub fn elusive(args: Args) -> Result<()> {
             let path = entry.path();
 
             if path.exists() && path.is_file() {
-                File::open(path)?.read_to_end(&mut buf)?;
+                File::open(path)?.read_to_string(&mut buf)?;
             }
         }
     }
@@ -127,7 +127,7 @@ pub fn elusive(args: Args) -> Result<()> {
         ));
     }
 
-    let config: Config = toml::from_slice(&buf)?;
+    let config: Config = toml::from_str(&buf)?;
 
     match command {
         Command::Initramfs {
