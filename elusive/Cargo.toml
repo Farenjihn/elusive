@@ -15,16 +15,16 @@ path = "src/main.rs"
 anyhow = "1.0.69"
 env_logger = "0.10.0"
 flate2 = "1.0.25"
-libc = "0.2.139"
+libc = "0.2.140"
 log = "0.4.17"
-thiserror = "1.0.38"
+thiserror = "1.0.39"
 toml = "0.7.2"
 walkdir = "2.3.2"
 xz2 = "0.1.7"
 zstd = "0.12.3+zstd.1.5.2"
 
 [dependencies.clap]
-version = "4.1.4"
+version = "4.1.8"
 features = ["derive"]
 
 [dependencies.object]
@@ -33,7 +33,7 @@ default-features = false
 features = ["elf", "read_core", "std"]
 
 [dependencies.serde]
-version = "1.0.152"
+version = "1.0.155"
 features = ["derive"]
 
 [dependencies.kmod-sys]
