@@ -24,7 +24,7 @@ xz2 = "0.1.7"
 zstd = "0.12.3+zstd.1.5.2"
 
 [dependencies.clap]
-version = "4.1.11"
+version = "4.2.0"
 features = ["derive"]
 
 [dependencies.object]
@@ -33,7 +33,7 @@ default-features = false
 features = ["elf", "read_core", "std"]
 
 [dependencies.serde]
-version = "1.0.157"
+version = "1.0.159"
 features = ["derive"]
 
 [dependencies.kmod-sys]
