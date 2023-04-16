@@ -102,9 +102,10 @@ where
 fn find_lib(lib: &OsStr) -> Result<PathBuf> {
     let mut linkmap = MaybeUninit::<*mut link_map>::uninit();
 
-    // most distributions do not include /lib/systemd in ld.so cache
+    // most distributions do not include /lib64/systemd or /usr/lib64/systemd
+    // in ld.so cache and we're assuming a merged /usr
     let name = if lib.as_bytes().starts_with(b"libsystemd") {
-        CString::new([b"/lib/systemd/", lib.as_bytes()].concat())?
+        CString::new([b"/lib64/systemd/", lib.as_bytes()].concat())?
     } else {
         CString::new(lib.as_bytes())?
     };
