@@ -201,7 +201,7 @@ impl Entry {
         write!(buf, "{:08x}", self.gid)?; // gid is always 0 (root)
         write!(buf, "{:08x}", self.nlink)?;
         write!(buf, "{:08x}", self.mtime)?;
-        write!(buf, "{:08x}", file_size as usize)?;
+        write!(buf, "{:08x}", file_size)?;
         write!(buf, "{:08x}", self.dev_major)?; // dev_major is always 0
         write!(buf, "{:08x}", self.dev_minor)?; // dev_minor is always 0
         write!(buf, "{:08x}", self.rdev_major)?;
