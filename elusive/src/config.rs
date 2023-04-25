@@ -2,41 +2,26 @@
 //!
 //! This module implements the configuration for elusive's initramfs
 //! and microcode bundle generation. Configuration is done through a
-//! declarative `toml` file that specifies what has to be included in
+//! declarative `yaml` file that specifies what has to be included in
 //! the initramfs or microcode bundle.
 //!
 //! An example configuration may look like:
 //!
-//! ```toml
-//! [initramfs]
-//! init = "init"
+//! ```yaml
+//! init: path/to/init/script
+//! settings:
+//!   decompress_modules: true
+//! module:
+//!   name: example
+//!   binaries:
+//!     - /usr/bin/busybox
 //!
-//! [[initramfs.bin]]
-//! path = "/bin/busybox"
-//!
-//! [[initramfs.lib]]
-//! path = "/lib64/ld-linux-x86-64.so.2"
-//!
-//! [microcode]
-//! amd = "/lib/firmware/amd-ucode"
-//! intel = "/lib/firmware/intel-ucode"
+//! amd_ucode: /lib/firmware/amd-ucode
+//! intel_ucode: /lib/firmware/intel-ucode
 //! ```
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::path::PathBuf;
-
-fn default_as_true() -> bool {
-    true
-}
-
-/// Top-level configuration structure
-#[derive(Deserialize, Debug)]
-pub struct Config {
-    /// Configuration for initramfs generation
-    pub initramfs: Option<Initramfs>,
-    /// Configuration for microcode bundle generation
-    pub microcode: Option<Microcode>,
-}
 
 /// Initramfs generation configuration
 #[derive(Deserialize, Debug)]
@@ -45,74 +30,164 @@ pub struct Initramfs {
     pub init: PathBuf,
     /// Where to find the optional shutdown script for the initramfs
     pub shutdown: Option<PathBuf>,
-    /// Binaries to add to the initramfs
-    pub bin: Option<Vec<Binary>>,
-    /// Libraries to add to the initramfs
-    pub lib: Option<Vec<Library>>,
-    /// Filesystem trees to copy into the initramfs
-    pub tree: Option<Vec<Tree>>,
-    /// Symlinks to add to the initramfs
-    pub symlink: Option<Vec<Symlink>>,
-    /// Modules to include in the initramfs
-    pub module: Option<Vec<Module>>,
-    /// Sets whether added modules should be uncompressed
-    #[serde(default)]
-    pub uncompress_modules: bool,
+    /// Various flags to tweak generation
+    pub settings: Settings,
+    /// Optional module for overrides
+    pub module: Option<Module>,
 }
 
-/// Configuration for an executable binary
+/// Initramfs generation settings such as various flags
+#[derive(Deserialize, Default, Debug)]
+pub struct Settings {
+    /// Sets whether added kernel modules should be decompressed
+    #[serde(default)]
+    pub decompress_modules: bool,
+    /// Override path where kernel module are searched
+    pub boot_module_path: Option<PathBuf>,
+    /// Override kernel version for which modules are searched
+    pub kernel_release: Option<String>,
+}
+
+/// Initramfs configuration module
 #[derive(Deserialize, Debug)]
+pub struct Module {
+    /// Name to refer to this module
+    pub name: Option<String>,
+    /// Binaries to add to the initramfs
+    #[serde(default = "Vec::new")]
+    pub binaries: Vec<Binary>,
+    /// Filesystem trees to copy into the initramfs
+    #[serde(default = "Vec::new")]
+    pub files: Vec<File>,
+    /// Symlinks to add to the initramfs
+    #[serde(default = "Vec::new")]
+    pub symlinks: Vec<Symlink>,
+    /// Modules to include in the initramfs
+    #[serde(default = "Vec::new")]
+    pub boot_modules: Vec<BootModule>,
+}
+
+/// Configuration for an ELF binary
+#[derive(Debug)]
 pub struct Binary {
     /// The path where the binary can be found
     pub path: PathBuf,
-    /// Whether to keep the original path, if false
-    /// the binary will be placed in /usr/bin
-    #[serde(default)]
-    pub keep_path: bool,
 }
 
-/// Configuration for a dynamic library
+impl<'de> Deserialize<'de> for Binary {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::{Error, MapAccess, Visitor};
+        use std::fmt;
+
+        struct BinaryVisitor;
+
+        impl<'de> Visitor<'de> for BinaryVisitor {
+            type Value = Binary;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write!(formatter, "a string or a map with one of 'name' or 'path'")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                Ok(Binary {
+                    path: PathBuf::from(v),
+                })
+            }
+
+            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                match map.next_key::<String>()? {
+                    Some(ref key) if key == "path" => Ok(Binary {
+                        path: map.next_value()?,
+                    }),
+                    _ => Err(Error::custom("missing key 'path'".to_string())),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(BinaryVisitor)
+    }
+}
+
+/// Configuration for a filesystem tree
 #[derive(Deserialize, Debug)]
-pub struct Library {
-    /// The path where the library can be found
-    pub path: PathBuf,
-    /// Whether to keep the original path, if false
-    /// the binary will be placed in /usr/lib
-    #[serde(default = "default_as_true")]
-    pub keep_path: bool,
+pub struct File {
+    /// The destination in the initramfs
+    pub destination: PathBuf,
+    /// The list of files and directories to copy
+    pub sources: Vec<PathBuf>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Symlink {
+    /// The path where the symlink will be placed
+    pub source: PathBuf,
+    /// The file the symlink points to
+    pub destination: PathBuf,
+}
+
+/// Configuration for a kernel module
+#[derive(Debug)]
+pub enum BootModule {
+    /// Name of the kernel module to include
+    Name(String),
+    /// Path to the kernel module, useful for out of tree modules
+    Path(PathBuf),
+}
+
+impl<'de> Deserialize<'de> for BootModule {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::{Error, MapAccess, Visitor};
+        use std::fmt;
+
+        struct BootModuleVisitor;
+
+        impl<'de> Visitor<'de> for BootModuleVisitor {
+            type Value = BootModule;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write!(formatter, "a string or a map with one of 'name' or 'path'")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                Ok(BootModule::Name(v.to_string()))
+            }
+
+            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                match map.next_key::<String>()? {
+                    Some(ref key) if key == "name" => Ok(BootModule::Name(map.next_value()?)),
+                    Some(ref key) if key == "path" => Ok(BootModule::Path(map.next_value()?)),
+                    _ => Err(Error::custom("missing one of 'name' or 'path'".to_string())),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(BootModuleVisitor)
+    }
 }
 
 /// Microcode generation configuration
 #[derive(Deserialize, Debug)]
 pub struct Microcode {
     /// The path to the AMD specific blobs
-    pub amd: Option<PathBuf>,
+    pub amd_ucode: Option<PathBuf>,
     /// The path to the Intel specific blobs
-    pub intel: Option<PathBuf>,
-}
-
-/// Configuration for a filesystem tree
-#[derive(Deserialize, Debug)]
-pub struct Tree {
-    /// The destination in the initramfs
-    pub path: PathBuf,
-    /// The list of files and directories to copy
-    pub copy: Vec<PathBuf>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct Symlink {
-    /// The path where the symlink will be placed
-    pub path: PathBuf,
-    /// The file the symlink points to
-    pub link: PathBuf,
-}
-
-/// Configuration for a kernel module
-#[derive(Deserialize, Debug)]
-pub struct Module {
-    /// Name of the kernel module to include
-    pub name: Option<String>,
-    /// Path to the kernel module, useful for out of tree modules
-    pub path: Option<PathBuf>,
+    pub intel_ucode: Option<PathBuf>,
 }

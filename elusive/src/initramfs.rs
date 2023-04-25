@@ -59,8 +59,10 @@ impl InitramfsBuilder {
         let mut entries = Vec::new();
         let mut cache = HashSet::new();
 
+        info!("Generating skeleton initramfs");
+
         for dir in &ROOT_DIRS {
-            info!("Adding default directory: {}", dir);
+            info!("‣ Adding default directory: {}", dir);
 
             let entry = EntryBuilder::directory(dir).mode(DEFAULT_DIR_MODE).build();
 
@@ -69,7 +71,7 @@ impl InitramfsBuilder {
         }
 
         for (src, dest) in &ROOT_SYMLINKS {
-            info!("Adding default symlink: {} -> {}", src, dest);
+            info!("‣ Adding default symlink: {} -> {}", src, dest);
 
             let entry = EntryBuilder::symlink(src, Path::new(dest))
                 .mode(DEFAULT_SYMLINK_MODE)
@@ -84,13 +86,8 @@ impl InitramfsBuilder {
         Ok(builder)
     }
 
-    /// Create a new builder from a configuration, optionally providing
-    /// a source directory for kernel modules
-    pub fn from_config(
-        config: config::Initramfs,
-        module_dir: Option<&Path>,
-        kernel_release: Option<&str>,
-    ) -> Result<Self> {
+    /// Create a new builder from a configuration
+    pub fn from_config(config: &config::Initramfs, modules: &[config::Module]) -> Result<Self> {
         let mut builder = InitramfsBuilder::new()?;
         builder.add_init(&config.init)?;
 
@@ -98,32 +95,9 @@ impl InitramfsBuilder {
             builder.add_shutdown(shutdown)?;
         }
 
-        if let Some(binaries) = config.bin {
-            for binary in binaries {
-                builder.add_binary(&binary.path, binary.keep_path)?;
-            }
-        }
-
-        if let Some(libraries) = config.lib {
-            for library in libraries {
-                builder.add_library(&library.path, library.keep_path)?;
-            }
-        }
-
-        if let Some(trees) = config.tree {
-            for tree in trees {
-                builder.add_tree(&tree.copy, &tree.path)?;
-            }
-        }
-
-        if let Some(symlinks) = config.symlink {
-            for symlink in symlinks {
-                builder.add_symlink(&symlink.path, &symlink.link)?;
-            }
-        }
-
-        if let Some(modules) = config.module {
-            let mut kmod = if let Some(path) = module_dir {
+        let settings = &config.settings;
+        let mut kmod = match &settings.boot_module_path {
+            Some(path) => {
                 if !path.exists() {
                     bail!(io::Error::new(
                         io::ErrorKind::NotFound,
@@ -132,27 +106,48 @@ impl InitramfsBuilder {
                 }
 
                 Kmod::with_directory(path)
-            } else {
-                Kmod::new()
-            }?;
+            }
+            None => Kmod::new(),
+        }?;
 
-            for module in modules {
-                if let Some(path) = module.path {
-                    builder.add_module_from_path(
-                        &mut kmod,
-                        &path,
-                        config.uncompress_modules,
-                        kernel_release,
-                    )?;
-                } else if let Some(name) = module.name {
-                    builder.add_module_from_name(
-                        &mut kmod,
-                        &name,
-                        config.uncompress_modules,
-                        kernel_release,
-                    )?;
-                } else {
-                    bail!(InitramfsError::InvalidModuleConfiguration);
+        for module in modules {
+            info!(
+                "Reading configuration module: {}",
+                &module.name.as_deref().unwrap_or("<unnamed>")
+            );
+
+            for binary in &module.binaries {
+                builder.add_elf(&binary.path)?;
+            }
+
+            for spec in &module.files {
+                builder.add_files(&spec.sources, &spec.destination)?;
+            }
+
+            for symlink in &module.symlinks {
+                builder.add_symlink(&symlink.source, &symlink.destination)?;
+            }
+
+            for module in &module.boot_modules {
+                use config::BootModule;
+
+                match module {
+                    BootModule::Name(name) => {
+                        builder.add_module_from_name(
+                            &mut kmod,
+                            name,
+                            settings.decompress_modules,
+                            settings.kernel_release.as_deref(),
+                        )?;
+                    }
+                    BootModule::Path(path) => {
+                        builder.add_module_from_path(
+                            &mut kmod,
+                            path,
+                            settings.decompress_modules,
+                            settings.kernel_release.as_deref(),
+                        )?;
+                    }
                 }
             }
         }
@@ -166,7 +161,7 @@ impl InitramfsBuilder {
             return Ok(());
         }
 
-        info!("Adding init entrypoint: {}", path.display());
+        info!("‣ Adding init entrypoint: {}", path.display());
         self.add_entrypoint("init", path)?;
 
         Ok(())
@@ -178,56 +173,56 @@ impl InitramfsBuilder {
             return Ok(());
         }
 
-        info!("Adding shutdown entrypoint: {}", path.display());
+        info!("‣ Adding shutdown entrypoint: {}", path.display());
         self.add_entrypoint("shutdown", path)?;
 
         Ok(())
     }
 
-    /// Add the binary from the provided path to the initramfs
-    /// if keep_path is false, the binary is installed in /usr/bin
-    pub fn add_binary(&mut self, path: &Path, keep_path: bool) -> Result<()> {
+    /// Adds an elf binary to the initramfs, also adding its dynamic dependencies
+    pub fn add_elf(&mut self, path: &Path) -> Result<()> {
         if self.cache.contains(path) {
             return Ok(());
         }
 
-        let dest = if keep_path {
-            path.parent()
-                .expect("parent path exists when keep_path set to true")
-        } else {
-            Path::new("/usr/bin")
-        };
+        let dest = path
+            .parent()
+            .expect("parent path exists when keep_path set to true");
 
-        info!("Adding binary: {}", path.display());
+        info!("‣ Adding binary: {}", path.display());
         self.mkdir_all(dest);
-        self.add_elf(path, dest)?;
-
-        for dependency in depend::resolve(path)? {
-            self.add_library(&dependency, true)?;
+        if !path.exists() {
+            error!("Failed to find binary: {}", path.display());
+            bail!(io::Error::new(
+                io::ErrorKind::NotFound,
+                path.display().to_string()
+            ));
         }
 
-        Ok(())
-    }
-
-    /// Add the library from the provided path to the initramfs
-    pub fn add_library(&mut self, path: &Path, keep_path: bool) -> Result<()> {
-        if self.cache.contains(path) {
-            return Ok(());
-        }
-
-        let dest = if keep_path {
-            path.parent()
-                .expect("parent path exists when keep_path set to true")
-        } else {
-            Path::new("/usr/lib")
+        let filename = match path.file_name() {
+            Some(filename) => filename,
+            None => {
+                error!("Failed to get filename for binary: {}", path.display());
+                bail!(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    path.display().to_string()
+                ));
+            }
         };
 
-        info!("Adding library: {}", path.display());
-        self.mkdir_all(dest);
-        self.add_elf(path, dest)?;
+        let name = dest.join(filename);
+        let metadata = fs::metadata(path)?;
+        let data = fs::read(path)?;
+
+        let entry = EntryBuilder::file(name, data)
+            .with_metadata(&metadata)
+            .build();
+
+        self.cache.insert(path.to_path_buf());
+        self.entries.push(entry);
 
         for dependency in depend::resolve(path)? {
-            self.add_library(&dependency, true)?;
+            self.add_elf(&dependency)?;
         }
 
         Ok(())
@@ -235,32 +230,32 @@ impl InitramfsBuilder {
 
     /// Add the filesystem tree from the provided source to the provided destination in the
     /// initramfs
-    pub fn add_tree(&mut self, copy: &[PathBuf], dest: &Path) -> Result<()> {
-        info!("Copying filesystem tree into: {}", dest.display());
+    pub fn add_files(&mut self, sources: &[PathBuf], destination: &Path) -> Result<()> {
+        info!("‣ Copying files:");
+        self.mkdir_all(destination);
 
-        self.mkdir_all(dest);
-
-        for tree in copy {
-            if !tree.exists() {
-                error!("Failed to find tree: {}", tree.display());
+        for source in sources {
+            info!("    ├─ source = {}", source.display());
+            if !source.exists() {
+                error!("Failed to find tree: {}", source.display());
                 bail!(io::Error::new(
                     io::ErrorKind::NotFound,
-                    tree.display().to_string()
+                    source.display().to_string()
                 ));
             }
 
-            let metadata = fs::metadata(tree)?;
+            let metadata = fs::metadata(source)?;
             let ty = metadata.file_type();
 
             if ty.is_dir() {
-                let walk = WalkDir::new(tree).min_depth(1);
+                let walk = WalkDir::new(source).min_depth(1);
 
                 for entry in walk {
                     let entry = entry?;
 
                     let path = entry.path();
-                    let name = dest.join(
-                        path.strip_prefix(tree)
+                    let name = destination.join(
+                        path.strip_prefix(source)
                             .expect("entry should be under root path"),
                     );
 
@@ -289,17 +284,18 @@ impl InitramfsBuilder {
                     self.entries.push(entry);
                 }
             } else {
-                let name = dest.join(tree.file_name().expect("path should contain file name"));
+                let name =
+                    destination.join(source.file_name().expect("path should contain file name"));
 
                 if self.cache.contains(&name) {
                     return Ok(());
                 }
 
                 let builder = if ty.is_file() {
-                    let data = fs::read(tree)?;
+                    let data = fs::read(source)?;
                     EntryBuilder::file(&name, data)
                 } else if ty.is_symlink() {
-                    let data = fs::read_link(tree)?;
+                    let data = fs::read_link(source)?;
                     EntryBuilder::symlink(&name, &data)
                 } else {
                     EntryBuilder::special_file(&name)
@@ -312,27 +308,29 @@ impl InitramfsBuilder {
             }
         }
 
+        info!("    └─ destination = {}", destination.display());
+
         Ok(())
     }
 
     /// Add a symlink to the initramfs
-    pub fn add_symlink(&mut self, path: &Path, link: &Path) -> Result<()> {
-        if self.cache.contains(path) {
+    pub fn add_symlink(&mut self, source: &Path, destination: &Path) -> Result<()> {
+        if self.cache.contains(destination) {
             return Ok(());
         }
 
-        if let Some(parent) = path.parent() {
+        if let Some(parent) = destination.parent() {
             self.mkdir_all(parent);
         }
 
-        info!("Adding symlink:");
-        info!("├── source = {}", path.display());
-        info!("└── target = {}", link.display());
-        let entry = EntryBuilder::symlink(path, link)
+        info!("‣ Adding symlink:");
+        info!("    ├─ source = {}", source.display());
+        info!("    └─ destination = {}", destination.display());
+        let entry = EntryBuilder::symlink(destination, source)
             .mode(DEFAULT_SYMLINK_MODE)
             .build();
 
-        self.cache.insert(path.to_path_buf());
+        self.cache.insert(destination.to_path_buf());
         self.entries.push(entry);
 
         Ok(())
@@ -348,7 +346,7 @@ impl InitramfsBuilder {
     ) -> Result<()> {
         let module = kmod.module_from_name(name)?;
 
-        info!("Adding module with name: {}", name);
+        info!("‣ Adding boot module with name: {}", name);
         self.add_module(kmod, module, uncompress, kernel_release)?;
 
         Ok(())
@@ -364,7 +362,7 @@ impl InitramfsBuilder {
     ) -> Result<()> {
         let module = kmod.module_from_path(path)?;
 
-        info!("Adding module from path: {}", path.display());
+        info!("‣ Adding boot module from path: {}", path.display());
         self.add_module(kmod, module, uncompress, kernel_release)?;
 
         Ok(())
@@ -401,42 +399,6 @@ impl InitramfsBuilder {
         Ok(())
     }
 
-    /// Adds an elf binary to the initramfs, also adding its dynamic dependencies
-    fn add_elf(&mut self, path: &Path, dest: &Path) -> Result<()> {
-        if !path.exists() {
-            error!("Failed to find binary: {}", path.display());
-            bail!(io::Error::new(
-                io::ErrorKind::NotFound,
-                path.display().to_string()
-            ));
-        }
-
-        let filename = match path.file_name() {
-            Some(filename) => filename,
-            None => {
-                error!("Failed to get filename for binary: {}", path.display());
-                bail!(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    path.display().to_string()
-                ));
-            }
-        };
-
-        let name = dest.join(filename);
-        let metadata = fs::metadata(path)?;
-        let data = fs::read(path)?;
-
-        let entry = EntryBuilder::file(name, data)
-            .with_metadata(&metadata)
-            .build();
-
-        self.cache.insert(path.to_path_buf());
-        self.entries.push(entry);
-
-        Ok(())
-    }
-
-    /// Add a module to the initramfs
     fn add_module(
         &mut self,
         kmod: &mut Kmod,
@@ -556,44 +518,40 @@ mod tests {
 
     #[test]
     fn test_initramfs() -> Result<()> {
-        let mut bin = vec![];
-        let mut lib = vec![];
-        let mut tree = vec![];
-        let mut module = vec![];
+        let mut binaries = Vec::new();
+        let mut files = Vec::new();
+        let mut boot_modules = Vec::new();
 
         let mut builder = InitramfsBuilder::new()?;
         builder.add_init(Path::new("/sbin/init"))?;
 
         let ls = PathBuf::from("/bin/ls");
         if ls.exists() {
-            builder.add_binary(&ls, false)?;
-            bin.push(config::Binary {
-                path: ls,
-                keep_path: false,
-            });
+            builder.add_elf(&ls)?;
+            binaries.push(config::Binary { path: ls });
         }
 
         let libc = PathBuf::from("/lib/libc.so.6");
         if libc.exists() {
-            builder.add_library(&libc)?;
-            lib.push(config::Library { path: libc });
+            builder.add_elf(&libc)?;
+            binaries.push(config::Binary { path: libc });
         }
 
         let hosts = PathBuf::from("/etc/hosts");
         if hosts.exists() {
-            builder.add_tree(&[hosts.clone()], Path::new("/etc"))?;
-            tree.push(config::Tree {
-                path: PathBuf::from("/etc"),
-                copy: vec![hosts],
+            builder.add_files(&[hosts.clone()], Path::new("/etc"))?;
+            files.push(config::File {
+                destination: PathBuf::from("/etc"),
+                sources: vec![hosts],
             });
         }
 
         let udev = PathBuf::from("/lib/udev/rules.d");
         if udev.exists() {
-            builder.add_tree(&[udev.clone()], Path::new("/lib/udev/rules.d"))?;
-            tree.push(config::Tree {
-                path: PathBuf::from("/lib/udev/rules.d"),
-                copy: vec![udev],
+            builder.add_files(&[udev.clone()], Path::new("/lib/udev/rules.d"))?;
+            files.push(config::File {
+                destination: PathBuf::from("/lib/udev/rules.d"),
+                sources: vec![udev],
             });
         }
 
@@ -602,30 +560,27 @@ mod tests {
 
         if btrfs.path().is_ok() {
             builder.add_module(&mut kmod, btrfs, false, None)?;
-            module.push(config::Module {
-                name: Some("btrfs".to_string()),
-                path: None,
-            })
+            boot_modules.push(config::BootModule::Name("btrfs".to_string()));
         }
 
         let config = config::Initramfs {
             init: PathBuf::from("/sbin/init"),
             shutdown: None,
-            bin: if bin.is_empty() { None } else { Some(bin) },
-            lib: if lib.is_empty() { None } else { Some(lib) },
-            tree: if tree.is_empty() { None } else { Some(tree) },
-            module: if module.is_empty() {
-                None
-            } else {
-                Some(module)
-            },
-            symlink: None,
-            uncompress_modules: false,
+            settings: config::Settings::default(),
+            module: None,
         };
+
+        let modules = vec![config::Module {
+            name: None,
+            binaries,
+            files,
+            boot_modules,
+            symlinks: Vec::new(),
+        }];
 
         assert_eq!(
             builder.build().into_archive(),
-            InitramfsBuilder::from_config(config, None, None)?
+            InitramfsBuilder::from_config(&config, &modules)?
                 .build()
                 .into_archive(),
         );

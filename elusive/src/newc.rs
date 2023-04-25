@@ -187,7 +187,7 @@ impl Entry {
             None => 0,
         };
 
-        debug!("Serializing entry: {:#?}", self,);
+        debug!("Serializing entry: {:?}", self,);
 
         // serialize the header for this entry
         let filename = self.name.into_bytes_with_nul()?;

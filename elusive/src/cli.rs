@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config;
 use crate::encoder::Encoder;
 use crate::initramfs::InitramfsBuilder;
 use crate::io::{Input, Output};
@@ -6,24 +6,25 @@ use crate::microcode::MicrocodeBundle;
 
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
-use log::{error, info};
-use std::fs::File;
-use std::io::Read;
+use log::{debug, error, info};
+use serde::Deserialize;
 use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
 use std::{fs, io};
 use thiserror::Error;
 
 /// Default path for the config file
-const CONFIG_PATH: &str = "/etc/elusive.toml";
+const CONFIG_PATH: &str = "/etc/elusive.yaml";
 const CONFDIR_PATH: &str = "/etc/elusive.d";
 
 #[derive(Error, Debug)]
 pub enum ConfigurationError {
-    #[error("no configuration was found in either {0} or {1}")]
-    EmptyConfiguration(String, String),
-    #[error("provided configuration is invalid for the current subcommand")]
-    InvalidConfiguration,
+    #[error("default configuration skipped but no config path specified")]
+    SkipWithoutParameter,
+    #[error("configuration file is not a file or does not exist: {0}")]
+    ExpectedFile(PathBuf),
+    #[error("configuration directory is not a directory or does not exist: {0}")]
+    ExpectedDirectory(PathBuf),
 }
 
 #[derive(Parser, Debug)]
@@ -85,49 +86,23 @@ pub fn elusive(args: Args) -> Result<()> {
         skip_default_paths,
     } = args;
 
-    let config = config.unwrap_or_else(|| {
-        if skip_default_paths {
-            PathBuf::from("/dev/null")
-        } else {
-            PathBuf::from(CONFIG_PATH)
-        }
-    });
+    let config_path = match (config, skip_default_paths) {
+        (Some(path), _) => path,
+        (None, false) => PathBuf::from(CONFIG_PATH),
+        (None, true) => bail!(ConfigurationError::SkipWithoutParameter),
+    };
 
-    let confdir = confdir.unwrap_or_else(|| {
-        if skip_default_paths {
-            PathBuf::from("/dev/null")
-        } else {
-            PathBuf::from(CONFDIR_PATH)
-        }
-    });
+    debug!("Top-level config file path set to {:?}", config_path);
+
+    let confdir_path = match (confdir, skip_default_paths) {
+        (Some(path), _) => Some(path),
+        (None, false) => Some(PathBuf::from(CONFDIR_PATH)),
+        _ => None,
+    };
+
+    debug!("Config module directory path set to {:?}", confdir_path);
 
     let encoder = encoder.unwrap_or(Encoder::Zstd);
-
-    let mut buf = String::new();
-
-    if config.exists() && config.is_file() {
-        File::open(&config)?.read_to_string(&mut buf)?;
-    }
-
-    if confdir.exists() && confdir.is_dir() {
-        for entry in fs::read_dir(&confdir)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.exists() && path.is_file() {
-                File::open(path)?.read_to_string(&mut buf)?;
-            }
-        }
-    }
-
-    if buf.is_empty() {
-        bail!(ConfigurationError::EmptyConfiguration(
-            config.display().to_string(),
-            confdir.display().to_string()
-        ));
-    }
-
-    let config: Config = toml::from_str(&buf)?;
 
     match command {
         Command::Initramfs {
@@ -136,46 +111,91 @@ pub fn elusive(args: Args) -> Result<()> {
             output,
             kernel_release,
         } => {
-            if let Some(config) = config.initramfs {
-                let initramfs = InitramfsBuilder::from_config(
-                    config,
-                    modules.as_deref(),
-                    kernel_release.as_deref(),
-                )?
-                .build();
-
-                info!("Writing initramfs to: {}", output.display());
-                let write = Output::from_path(output)?;
-                let mut write = BufWriter::new(write);
-
-                if let Some(path) = ucode {
-                    info!("Adding microcode bundle from: {}", path.display());
-
-                    let read = Input::from_path(path)?;
-                    let mut read = BufReader::new(read);
-
-                    io::copy(&mut read, &mut write)?;
+            let mut config: config::Initramfs = {
+                if !config_path.exists() || !config_path.is_file() {
+                    bail!(ConfigurationError::ExpectedFile(config_path));
                 }
 
-                encoder.encode_archive(initramfs.into_archive(), write)?;
-            } else {
-                error!("No configuration provided for initramfs generation");
-                bail!(ConfigurationError::InvalidConfiguration);
+                debug!("Parsing top-level config file: {:?}", config_path);
+                let data = fs::read(config_path)?;
+                serde_yaml::from_slice(&data)?
+            };
+
+            // override kernel modules path
+            if let Some(path) = modules {
+                debug!("Overriding kernel module path: {:?}", path);
+                config.settings.boot_module_path = Some(path);
             }
+
+            // override kernel release
+            if let Some(release) = kernel_release {
+                debug!("Overriding kernel release: {:?}", release);
+                config.settings.kernel_release = Some(release);
+            }
+
+            let mut modules: Vec<config::Module> = Vec::new();
+            if let Some(module) = config.module.take() {
+                modules.push(module);
+            }
+
+            if let Some(confdir_path) = confdir_path {
+                if !confdir_path.exists() || !confdir_path.is_dir() {
+                    bail!(ConfigurationError::ExpectedDirectory(confdir_path));
+                }
+
+                for entry in fs::read_dir(&confdir_path)? {
+                    let entry = entry?;
+                    let path = entry.path();
+
+                    if path.is_file() {
+                        debug!("Parsing module config file: {:?}", path);
+                        let data = fs::read(path)?;
+
+                        for document in serde_yaml::Deserializer::from_slice(&data) {
+                            let value = serde_yaml::Value::deserialize(document)?;
+                            let module = serde_yaml::from_value(value)?;
+                            modules.push(module);
+                        }
+                    }
+                }
+            }
+
+            info!("Generating initramfs");
+            let initramfs = InitramfsBuilder::from_config(&config, &modules)?.build();
+
+            info!("Writing initramfs to: {}", output.display());
+            let write = Output::from_path(output)?;
+            let mut write = BufWriter::new(write);
+
+            if let Some(path) = ucode {
+                info!("Adding microcode bundle from: {}", path.display());
+
+                let read = Input::from_path(path)?;
+                let mut read = BufReader::new(read);
+
+                io::copy(&mut read, &mut write)?;
+            }
+
+            encoder.encode_archive(initramfs.into_archive(), write)?;
         }
         Command::Microcode { output } => {
-            if let Some(config) = config.microcode {
-                let bundle = MicrocodeBundle::from_config(config)?;
+            let config: config::Microcode = {
+                if !config_path.exists() || !config_path.is_file() {
+                    bail!(ConfigurationError::ExpectedFile(config_path));
+                }
 
-                info!("Writing microcode cpio to: {}", output.display());
-                let write = Output::from_path(output)?;
-                let write = BufWriter::new(write);
+                let data = fs::read(config_path)?;
+                serde_yaml::from_slice(&data)?
+            };
 
-                encoder.encode_archive(bundle.build(), write)?;
-            } else {
-                error!("No configuration provided for microcode generation");
-                bail!(ConfigurationError::InvalidConfiguration);
-            }
+            info!("Generating microcode bundle");
+            let bundle = MicrocodeBundle::from_config(&config)?;
+
+            info!("Writing microcode cpio to: {}", output.display());
+            let write = Output::from_path(output)?;
+            let write = BufWriter::new(write);
+
+            encoder.encode_archive(bundle.build(), write)?;
         }
     }
 

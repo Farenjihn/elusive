@@ -1,7 +1,0 @@
-[[initramfs.bin]]
-path = "/sbin/btrfs"
-
-# -------------------------------
-
-[[initramfs.module]]
-name = "btrfs"

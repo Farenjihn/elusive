@@ -1,0 +1,3 @@
+name: btrfs
+boot_modules:
+  - btrfs

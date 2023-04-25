@@ -49,15 +49,15 @@ impl MicrocodeBundle {
     }
 
     /// Create a new bundle from a configuration
-    pub fn from_config(config: Microcode) -> Result<Self> {
+    pub fn from_config(config: &Microcode) -> Result<Self> {
         let mut bundle = MicrocodeBundle::new()?;
 
-        if let Some(path) = config.amd {
-            bundle.add_amd_ucode(&path)?;
+        if let Some(path) = &config.amd_ucode {
+            bundle.add_amd_ucode(path)?;
         }
 
-        if let Some(path) = config.intel {
-            bundle.add_intel_ucode(&path)?;
+        if let Some(path) = &config.intel_ucode {
+            bundle.add_intel_ucode(path)?;
         }
 
         Ok(bundle)

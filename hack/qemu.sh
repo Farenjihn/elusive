@@ -2,6 +2,8 @@
 
 set -e
 
+# export RUST_LOG=debug
+
 ELUSIVE="${PWD}/target/debug/elusive"
 OUTPUT_DIR="${PWD}/.output"
 
@@ -53,7 +55,7 @@ qemu() {
 }
 
 cleanup() {
-  rm -rf "${OUTPUT_DIR}"
+    rm -rf "${OUTPUT_DIR}"
 }
 trap cleanup EXIT
 
@@ -78,13 +80,13 @@ pushd samples > /dev/null
 
 elusive microcode \
     --skip-default-paths \
-    --config config/ucode.toml \
+    --config config/ucode.yaml \
     --output "${OUTPUT_DIR}/microcode"
 
 # build both initramfs archives
 elusive initramfs \
     --skip-default-paths \
-    --config config/basic.toml \
+    --config config/basic.yaml \
     --modules "${MODULES_DIR}" \
     --ucode "${OUTPUT_DIR}/microcode" \
     --output "${OUTPUT_DIR}/initramfs.basic"
@@ -92,7 +94,7 @@ elusive initramfs \
 export LD_LIBRARY_PATH="/lib/systemd"
 elusive initramfs \
     --skip-default-paths \
-    --config config/systemd.toml \
+    --config config/systemd.yaml \
     --confdir config/systemd.d \
     --modules "${MODULES_DIR}" \
     --ucode "${OUTPUT_DIR}/microcode" \
