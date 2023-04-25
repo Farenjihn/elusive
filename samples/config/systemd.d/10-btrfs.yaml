@@ -1,3 +1,5 @@
 name: btrfs
 boot_modules:
   - btrfs
+binaries:
+  - /usr/bin/btrfs
