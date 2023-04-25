@@ -104,6 +104,8 @@ fn find_lib(lib: &OsStr) -> Result<PathBuf> {
 
     // most distributions do not include /lib64/systemd or /usr/lib64/systemd
     // in ld.so cache and we're assuming a merged /usr
+    //
+    // yes this is a horrible hack
     let name = if lib.as_bytes().starts_with(b"libsystemd") {
         CString::new([b"/lib64/systemd/", lib.as_bytes()].concat())?
     } else {
@@ -145,7 +147,7 @@ fn find_lib(lib: &OsStr) -> Result<PathBuf> {
     Ok(path)
 }
 
-/// C struct used in `dlinfo` with `RTLD_DI_LINKMAP`
+// C struct used in `dlinfo` with `RTLD_DI_LINKMAP`
 #[repr(C)]
 struct link_map {
     l_addr: u64,

@@ -1,4 +1,4 @@
-//! Various utilities
+//! I/O utilities.
 
 use anyhow::{bail, Context, Result};
 use log::error;
@@ -6,13 +6,15 @@ use std::ffi::OsStr;
 use std::path::Path;
 use std::{env, fs, io};
 
-/// Allow reading from either a file or standard input
+/// Allow reading from either a file or standard input.
 pub enum Input {
     Stdin(io::Stdin),
     File(fs::File),
 }
 
 impl Input {
+    /// Create an Input from a provided path. If the path is '-'.
+    /// then the Input will read from standard input.
     pub fn from_path<T>(path: T) -> Result<Self>
     where
         T: AsRef<Path>,
@@ -45,12 +47,15 @@ impl io::Read for Input {
     }
 }
 
+/// Allow writing to either a file or standard output.
 pub enum Output {
     Stdout(io::Stdout),
     File(fs::File),
 }
 
 impl Output {
+    /// Create an Output from a provided path. If the path is '-'.
+    /// then the Output will write to standard output.
     pub fn from_path<T>(path: T) -> Result<Self>
     where
         T: AsRef<Path>,

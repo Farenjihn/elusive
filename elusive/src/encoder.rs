@@ -1,3 +1,5 @@
+//! Convenience types for handling cpio archive compression.
+
 use crate::newc::Archive;
 
 use anyhow::{bail, Result};
@@ -8,13 +10,14 @@ use std::str::FromStr;
 use thiserror::Error;
 use zstd::Encoder as ZstdEncoder;
 
+/// Custom error type for archive compression handling.
 #[derive(Error, Debug)]
 pub enum EncoderError {
     #[error("unknown encoder: {0}")]
-    ConversionFailed(String),
+    UnknownEncoder(String),
 }
 
-/// Represents the compression encoder used for an archive
+/// Represents the compression encoder used for an archive.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(PartialEq, Clone, Debug)]
 pub enum Encoder {
@@ -24,7 +27,7 @@ pub enum Encoder {
 }
 
 impl Encoder {
-    /// Encode the provided archive using the specified encoder variant
+    /// Encode the provided archive using the specified encoder variant.
     pub fn encode_archive<T>(&self, archive: Archive, out: T) -> Result<()>
     where
         T: Write,
@@ -33,7 +36,7 @@ impl Encoder {
         self.encode(&data, out)
     }
 
-    /// Encode the provided bytes using the specified encoder variant
+    /// Encode the provided bytes using the specified encoder variant.
     pub fn encode<T>(&self, data: &[u8], mut out: T) -> Result<()>
     where
         T: Write,
@@ -65,7 +68,7 @@ impl FromStr for Encoder {
             "none" => Ok(Encoder::None),
             "gzip" => Ok(Encoder::Gzip),
             "zstd" => Ok(Encoder::Zstd),
-            other => bail!(EncoderError::ConversionFailed(other.to_string())),
+            other => bail!(EncoderError::UnknownEncoder(other.to_string())),
         }
     }
 }

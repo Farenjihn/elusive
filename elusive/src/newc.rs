@@ -16,27 +16,27 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
-/// Magic number for newc cpio files
+/// Magic number for newc cpio files.
 const MAGIC: &[u8] = b"070701";
-/// Magic bytes for cpio trailer entries
+/// Magic bytes for cpio trailer entries.
 const TRAILER: &str = "TRAILER!!!";
 
-/// Offset for inode number to avoid reserved inodes (arbitrary)
+/// Offset for inode number to avoid reserved inodes (arbitrary).
 const INO_OFFSET: u64 = 1337;
 
-/// Represents a cpio archive
+/// Represents a cpio archive.
 #[derive(PartialEq, Debug)]
 pub struct Archive {
     entries: Vec<Entry>,
 }
 
 impl Archive {
-    /// Create a new archive from the provided entries
+    /// Create a new archive from the provided entries.
     pub fn new(entries: Vec<Entry>) -> Self {
         Archive { entries }
     }
 
-    /// Serialize this entry into cpio newc format
+    /// Serialize this entry into cpio newc format.
     pub fn into_bytes(self) -> Result<Vec<u8>> {
         let mut buf = Vec::new();
 
@@ -53,7 +53,7 @@ impl Archive {
     }
 }
 
-/// Represent the name of a cpio entry
+/// Represent the name of a cpio entry.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(PartialEq, Default)]
 pub struct EntryName {
@@ -61,7 +61,7 @@ pub struct EntryName {
 }
 
 impl EntryName {
-    /// Get a null byte terminated vector for this entry name
+    /// Get a null byte terminated vector for this entry name.
     pub fn into_bytes_with_nul(self) -> Result<Vec<u8>> {
         let cstr = CString::new(self.name)?;
         Ok(cstr.into_bytes_with_nul())
@@ -95,7 +95,7 @@ impl fmt::Debug for EntryName {
     }
 }
 
-/// Wrapper type for data
+/// Wrapper type for data.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(PartialEq)]
 pub struct EntryData {
@@ -125,37 +125,37 @@ impl fmt::Debug for EntryData {
     }
 }
 
-/// Cpio newc entry
+/// Cpio newc entry.
 #[derive(PartialEq, Default, Debug)]
 pub struct Entry {
-    /// Name of the entry (path)
+    /// Name of the entry (path).
     name: EntryName,
-    /// Inode of the entry
+    /// Inode of the entry.
     ino: u64,
-    /// Mode of the entry
+    /// Mode of the entry.
     mode: u32,
-    /// User id of the entry
+    /// User id of the entry.
     uid: u64,
-    /// Group id of the entry
+    /// Group id of the entry.
     gid: u64,
-    /// Number of links to the entry
+    /// Number of links to the entry.
     nlink: u64,
-    /// Modification time of the entry
+    /// Modification time of the entry.
     mtime: u64,
-    /// Device major number of the entry
+    /// Device major number of the entry.
     dev_major: u64,
-    /// Device minor number of the entry
+    /// Device minor number of the entry.
     dev_minor: u64,
-    /// Rdev major number of the entry
+    /// Rdev major number of the entry.
     rdev_major: u64,
-    /// Rdev minor number of the entry
+    /// Rdev minor number of the entry.
     rdev_minor: u64,
-    /// Data is entry is a regular file or symlink
+    /// Data is entry is a regular file or symlink.
     data: Option<EntryData>,
 }
 
 impl Entry {
-    /// Create an entry with the provided name
+    /// Create an entry with the provided name.
     fn new<T>(name: T) -> Self
     where
         T: Into<EntryName>,
@@ -166,7 +166,7 @@ impl Entry {
         }
     }
 
-    /// Create an entry with a name and data
+    /// Create an entry with a name and data.
     fn with_data<T>(name: T, data: Vec<u8>) -> Self
     where
         T: Into<EntryName>,
@@ -180,7 +180,7 @@ impl Entry {
 }
 
 impl Entry {
-    /// Serialize the entry to the passed buffer
+    /// Serialize the entry to the passed buffer.
     pub fn write(self, buf: &mut Vec<u8>) -> Result<()> {
         let file_size = match &self.data {
             Some(data) => data.len(),
@@ -220,14 +220,14 @@ impl Entry {
     }
 }
 
-/// Builder pattern for a cpio entry
+/// Builder pattern for a cpio entry.
 pub struct EntryBuilder {
-    /// Entry being built
+    /// Entry being built.
     entry: Entry,
 }
 
 impl EntryBuilder {
-    /// Create an entry representing a directory
+    /// Create an entry representing a directory.
     pub fn directory<T>(name: T) -> Self
     where
         T: Into<EntryName>,
@@ -237,7 +237,7 @@ impl EntryBuilder {
         }
     }
 
-    /// Create an entry representing a regular file
+    /// Create an entry representing a regular file.
     pub fn file<T>(name: T, data: Vec<u8>) -> Self
     where
         T: Into<EntryName>,
@@ -247,7 +247,7 @@ impl EntryBuilder {
         }
     }
 
-    /// Create an entry representing a special file
+    /// Create an entry representing a special file.
     pub fn special_file<T>(name: T) -> Self
     where
         T: Into<EntryName>,
@@ -257,7 +257,7 @@ impl EntryBuilder {
         }
     }
 
-    /// Create an entry representing a symlink
+    /// Create an entry representing a symlink.
     pub fn symlink<T>(name: T, path: &Path) -> Self
     where
         T: Into<EntryName>,
@@ -268,14 +268,14 @@ impl EntryBuilder {
         }
     }
 
-    /// Create a trailer entry
+    /// Create a trailer entry.
     pub fn trailer() -> Self {
         EntryBuilder {
             entry: Entry::new(TRAILER),
         }
     }
 
-    /// Add the provided metadata to the entry
+    /// Add the provided metadata to the entry.
     pub fn with_metadata(self, metadata: &Metadata) -> Self {
         let rdev = metadata.rdev();
 
@@ -290,38 +290,38 @@ impl EntryBuilder {
             .rdev_minor(minor(rdev))
     }
 
-    /// Set the mode for the entry
+    /// Set the mode for the entry.
     pub const fn mode(mut self, mode: u32) -> Self {
         self.entry.mode = mode;
         self
     }
 
-    /// Set the modification time for the entry
+    /// Set the modification time for the entry.
     pub const fn mtime(mut self, mtime: u64) -> Self {
         self.entry.mtime = mtime;
         self
     }
 
-    /// Set the major rdev number for the entry
+    /// Set the major rdev number for the entry.
     pub const fn rdev_major(mut self, rdev_major: u64) -> Self {
         self.entry.rdev_major = rdev_major;
         self
     }
 
-    /// Set the minor rdev number for the entry
+    /// Set the minor rdev number for the entry.
     pub const fn rdev_minor(mut self, rdev_minor: u64) -> Self {
         self.entry.rdev_minor = rdev_minor;
         self
     }
 
-    /// Build the entry
+    /// Build the entry.
     pub fn build(self) -> Entry {
         self.entry
     }
 }
 
-/// Pad the buffer so entries align according to cpio requirements
-pub fn pad_buf(buf: &mut Vec<u8>) {
+// pad the buffer so entries align according to cpio requirements.
+fn pad_buf(buf: &mut Vec<u8>) {
     let rem = buf.len() % 4;
 
     if rem != 0 {
@@ -329,13 +329,13 @@ pub fn pad_buf(buf: &mut Vec<u8>) {
     }
 }
 
-/// Shamelessly taken from the `nix` crate, thanks !
-pub const fn major(dev: u64) -> u64 {
+// shamelessly taken from the `nix` crate !
+const fn major(dev: u64) -> u64 {
     ((dev >> 32) & 0xffff_f000) | ((dev >> 8) & 0x0000_0fff)
 }
 
-/// Shamelessly taken from the `nix` crate, thanks !
-pub const fn minor(dev: u64) -> u64 {
+// shamelessly taken from the `nix` crate, thanks !
+const fn minor(dev: u64) -> u64 {
     ((dev >> 12) & 0xffff_ff00) | ((dev) & 0x0000_00ff)
 }
 

@@ -1,4 +1,4 @@
-//! Initramfs generation
+//! Initramfs generation.
 //!
 //! This module provides an API to help generating a compressed
 //! cpio archive to use as an initramfs.
@@ -15,17 +15,16 @@ use std::collections::HashSet;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use thiserror::Error;
 use walkdir::WalkDir;
 use xz2::read::XzDecoder;
 use zstd::Decoder as ZstdDecoder;
 
-/// Default directories to include in the initramfs
+/// Default directories to include in the initramfs.
 const ROOT_DIRS: [&str; 11] = [
     "/dev", "/etc", "/mnt", "/proc", "/run", "/sys", "/tmp", "/usr", "/usr/bin", "/usr/lib", "/var",
 ];
 
-/// Default symlinks to create within the initramfs
+/// Default symlinks to create within the initramfs.
 const ROOT_SYMLINKS: [(&str, &str); 7] = [
     ("/bin", "usr/bin"),
     ("/lib", "usr/lib"),
@@ -39,22 +38,16 @@ const ROOT_SYMLINKS: [(&str, &str); 7] = [
 const DEFAULT_DIR_MODE: u32 = 0o040_000 + 0o755;
 const DEFAULT_SYMLINK_MODE: u32 = 0o120_000;
 
-#[derive(Error, Debug)]
-pub enum InitramfsError {
-    #[error("invalid kernel module configuration, one of 'name' or 'path' must be specified")]
-    InvalidModuleConfiguration,
-}
-
-/// Builder for initramfs generation
+/// Builder for initramfs generation.
 pub struct InitramfsBuilder {
-    /// Entries for the cpio archive
+    /// Entries for the cpio archive.
     entries: Vec<Entry>,
-    /// Cache of processed paths to avoid duplicates
+    /// Cache of processed paths to avoid duplicates.
     cache: HashSet<PathBuf>,
 }
 
 impl InitramfsBuilder {
-    /// Create a new builder
+    /// Create a new builder.
     pub fn new() -> Result<Self> {
         let mut entries = Vec::new();
         let mut cache = HashSet::new();
@@ -86,7 +79,7 @@ impl InitramfsBuilder {
         Ok(builder)
     }
 
-    /// Create a new builder from a configuration
+    /// Create a new builder from a configuration.
     pub fn from_config(config: &config::Initramfs, modules: &[config::Module]) -> Result<Self> {
         let mut builder = InitramfsBuilder::new()?;
         builder.add_init(&config.init)?;
@@ -155,7 +148,7 @@ impl InitramfsBuilder {
         Ok(builder)
     }
 
-    /// Add the init script from the provided path to the initramfs
+    /// Add the init script from the provided path to the initramfs.
     pub fn add_init(&mut self, path: &Path) -> Result<()> {
         if self.cache.contains(path) {
             return Ok(());
@@ -167,7 +160,7 @@ impl InitramfsBuilder {
         Ok(())
     }
 
-    /// Add the shutdown script, similar to init
+    /// Add the shutdown script, similar to init.
     pub fn add_shutdown(&mut self, path: &Path) -> Result<()> {
         if self.cache.contains(path) {
             return Ok(());
@@ -179,7 +172,7 @@ impl InitramfsBuilder {
         Ok(())
     }
 
-    /// Adds an elf binary to the initramfs, also adding its dynamic dependencies
+    /// Adds an elf binary to the initramfs, also adding its dynamic dependencies.
     pub fn add_elf(&mut self, path: &Path) -> Result<()> {
         if self.cache.contains(path) {
             return Ok(());
@@ -228,8 +221,8 @@ impl InitramfsBuilder {
         Ok(())
     }
 
-    /// Add the filesystem tree from the provided source to the provided destination in the
-    /// initramfs
+    /// Add the filesystem tree from the provided source to the provided destination in the.
+    /// initramfs.
     pub fn add_files(&mut self, sources: &[PathBuf], destination: &Path) -> Result<()> {
         info!("‣ Copying files:");
         self.mkdir_all(destination);
@@ -313,7 +306,7 @@ impl InitramfsBuilder {
         Ok(())
     }
 
-    /// Add a symlink to the initramfs
+    /// Add a symlink to the initramfs.
     pub fn add_symlink(&mut self, source: &Path, destination: &Path) -> Result<()> {
         if self.cache.contains(destination) {
             return Ok(());
@@ -336,7 +329,7 @@ impl InitramfsBuilder {
         Ok(())
     }
 
-    /// Add a named kernel module to the initramfs
+    /// Add a named kernel module to the initramfs.
     pub fn add_module_from_name(
         &mut self,
         kmod: &mut Kmod,
@@ -352,7 +345,7 @@ impl InitramfsBuilder {
         Ok(())
     }
 
-    /// Add a kernel module to the initramfs from the provided path
+    /// Add a kernel module to the initramfs from the provided path.
     pub fn add_module_from_path(
         &mut self,
         kmod: &mut Kmod,
@@ -368,7 +361,7 @@ impl InitramfsBuilder {
         Ok(())
     }
 
-    /// Return an initramfs from this builder
+    /// Return an initramfs from this builder.
     pub fn build(self) -> Initramfs {
         Initramfs {
             entries: self.entries,
@@ -456,7 +449,7 @@ impl InitramfsBuilder {
         Ok(())
     }
 
-    /// Create directory entries by recursively walking the provided path
+    /// Create directory entries by recursively walking the provided path.
     fn mkdir_all(&mut self, path: &Path) {
         if self.cache.contains(path) {
             return;
@@ -476,14 +469,14 @@ impl InitramfsBuilder {
     }
 }
 
-/// Finalized Initramfs
+/// Finalized Initramfs.
 pub struct Initramfs {
-    /// Entries for the cpio archive
+    /// Entries for the cpio archive.
     entries: Vec<Entry>,
 }
 
 impl Initramfs {
-    /// Return an archive from this initramfs
+    /// Return an archive from this initramfs.
     pub fn into_archive(self) -> Archive {
         Archive::new(self.entries)
     }

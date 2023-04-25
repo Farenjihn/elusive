@@ -1,3 +1,5 @@
+//! Wrapper around libkmod for kernel module handling.
+
 use anyhow::{bail, Result};
 use kmod_sys::*;
 use std::ffi::CString;
@@ -18,6 +20,7 @@ const ZSTD_MAGIC: [u8; 4] = [0x28, 0xb5, 0x2f, 0xfd];
 const XZ_MAGIC: [u8; 6] = [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00];
 const GZIP_MAGIC: [u8; 2] = [0x1F, 0x8B];
 
+/// Custom error type to represent libkmod failures.
 #[derive(Error, Debug)]
 pub enum KmodError {
     #[error("failed to create module context")]
@@ -36,12 +39,14 @@ pub enum KmodError {
     UnknownMagic,
 }
 
+/// Wrapper handler for libkmod's kmod_ctx.
 pub struct Kmod {
     dir: PathBuf,
     inner: *mut kmod_ctx,
 }
 
 impl Kmod {
+    /// Create a new libkmod context.
     pub fn new() -> Result<Self> {
         let release = get_kernel_release()?;
         let dir = Path::new("/lib/modules").join(release);
@@ -49,6 +54,7 @@ impl Kmod {
         Self::with_directory(&dir)
     }
 
+    /// Create a new libkmod context with the specified kernel module directory.
     pub fn with_directory(dir: &Path) -> Result<Self> {
         let cstring = CString::new(dir.as_os_str().as_bytes())?;
         let inner = unsafe { kmod_new(cstring.as_ptr(), ptr::null()) };
@@ -63,14 +69,12 @@ impl Kmod {
         }
     }
 
-    pub fn as_mut_ptr(&mut self) -> *mut kmod_ctx {
-        self.inner
-    }
-
+    /// Get the kernel module directory for this context.
     pub fn dir(&self) -> &Path {
         &self.dir
     }
 
+    /// Get a Module with the provided name by searching it in the filesystem.
     pub fn module_from_name<T>(&mut self, name: T) -> Result<Module>
     where
         T: AsRef<str>,
@@ -78,11 +82,16 @@ impl Kmod {
         Module::from_name(self, name)
     }
 
+    /// Get a Module from the provided path which must point to a kernel module.
     pub fn module_from_path<T>(&mut self, path: T) -> Result<Module>
     where
         T: AsRef<Path>,
     {
         Module::from_path(self, path)
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut kmod_ctx {
+        self.inner
     }
 }
 
@@ -95,11 +104,13 @@ impl Drop for Kmod {
     }
 }
 
+/// Wrapper handler for libkmod's kmod_module.
 pub struct Module {
     inner: *mut kmod_module,
 }
 
 impl Module {
+    /// Get the name of this kernel module.
     pub fn name(&self) -> Result<&str> {
         let cstr = unsafe {
             let name = kmod_module_get_name(self.inner);
@@ -117,6 +128,7 @@ impl Module {
         Ok(name)
     }
 
+    /// Get the path of this kernel module.
     pub fn path(&self) -> Result<&Path> {
         let cstr = unsafe {
             let path = kmod_module_get_path(self.inner);
@@ -133,6 +145,7 @@ impl Module {
         Ok(Path::new(OsStr::from_bytes(cstr.to_bytes())))
     }
 
+    /// Get more information on this kernel module.
     pub fn info(&self) -> Result<ModuleInfo> {
         ModuleInfo::new(self)
     }
@@ -166,6 +179,7 @@ impl Module {
         Ok(Module { inner })
     }
 
+    /// Create a Module from the provided path.
     fn from_path<T>(ctx: &mut Kmod, path: T) -> Result<Self>
     where
         T: AsRef<Path>,
@@ -199,14 +213,20 @@ impl Drop for Module {
     }
 }
 
+/// Information obtained from a kernel module.
 pub struct ModuleInfo {
+    /// All aliases for this kernel module.
     aliases: Vec<String>,
+    /// All dependencies for this kernel module.
     depends: Vec<String>,
+    /// All soft pre-dependencies for this kernel module.
     softpre: Vec<String>,
+    /// All soft post-dependencies for this kernel module.
     softpost: Vec<String>,
 }
 
 impl ModuleInfo {
+    /// Create a new ModuleInfo from the provided Module.
     pub fn new(module: &Module) -> Result<Self> {
         let mut list: MaybeUninit<*mut kmod_list> = MaybeUninit::zeroed();
 
@@ -268,23 +288,28 @@ impl ModuleInfo {
         })
     }
 
+    /// Get a list of aliases for the kernel module.
     pub fn aliases(&self) -> &[String] {
         &self.aliases
     }
 
+    /// Get a list of dependencies of the kernel module.
     pub fn depends(&self) -> &[String] {
         &self.depends
     }
 
+    /// Get a list of soft pre-dependencies of the kernel module.
     pub fn pre_softdeps(&self) -> &[String] {
         &self.softpre
     }
 
+    /// Get a list of soft post-dependencies of the kernel module.
     pub fn post_softdeps(&self) -> &[String] {
         &self.softpost
     }
 }
 
+/// Enum to represent various compression format for modules.
 pub enum ModuleFormat {
     Elf,
     Zstd,

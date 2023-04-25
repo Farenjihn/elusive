@@ -1,11 +1,11 @@
-//! Configuration for elusive
+//! Configuration for elusive.
 //!
 //! This module implements the configuration for elusive's initramfs
 //! and microcode bundle generation. Configuration is done through a
 //! declarative `yaml` file that specifies what has to be included in
 //! the initramfs or microcode bundle.
 //!
-//! An example configuration may look like:
+//! An example configuration may look as follows:
 //!
 //! ```yaml
 //! init: path/to/init/script
@@ -23,54 +23,54 @@
 use serde::{Deserialize, Deserializer};
 use std::path::PathBuf;
 
-/// Initramfs generation configuration
+/// Initramfs generation configuration.
 #[derive(Deserialize, Debug)]
 pub struct Initramfs {
-    /// Where to find the init script for the initramfs
+    /// Where to find the init script for the initramfs.
     pub init: PathBuf,
-    /// Where to find the optional shutdown script for the initramfs
+    /// Where to find the optional shutdown script for the initramfs.
     pub shutdown: Option<PathBuf>,
-    /// Various flags to tweak generation
+    /// Various flags to tweak generation.
     pub settings: Settings,
-    /// Optional module for overrides
+    /// Optional module for overrides.
     pub module: Option<Module>,
 }
 
-/// Initramfs generation settings such as various flags
+/// Initramfs generation settings such as various flags.
 #[derive(Deserialize, Default, Debug)]
 pub struct Settings {
-    /// Sets whether added kernel modules should be decompressed
+    /// Sets whether added kernel modules should be decompressed.
     #[serde(default)]
     pub decompress_modules: bool,
-    /// Override path where kernel module are searched
+    /// Override path where kernel module are searched.
     pub boot_module_path: Option<PathBuf>,
-    /// Override kernel version for which modules are searched
+    /// Override kernel version for which modules are searched.
     pub kernel_release: Option<String>,
 }
 
-/// Initramfs configuration module
+/// Initramfs configuration module.
 #[derive(Deserialize, Debug)]
 pub struct Module {
-    /// Name to refer to this module
+    /// Name to refer to this module.
     pub name: Option<String>,
-    /// Binaries to add to the initramfs
+    /// Binaries to add to the initramfs.
     #[serde(default = "Vec::new")]
     pub binaries: Vec<Binary>,
-    /// Filesystem trees to copy into the initramfs
+    /// Filesystem trees to copy into the initramfs.
     #[serde(default = "Vec::new")]
     pub files: Vec<File>,
-    /// Symlinks to add to the initramfs
+    /// Symlinks to add to the initramfs.
     #[serde(default = "Vec::new")]
     pub symlinks: Vec<Symlink>,
-    /// Modules to include in the initramfs
+    /// Modules to include in the initramfs.
     #[serde(default = "Vec::new")]
     pub boot_modules: Vec<BootModule>,
 }
 
-/// Configuration for an ELF binary
+/// Configuration for an ELF binary.
 #[derive(Debug)]
 pub struct Binary {
-    /// The path where the binary can be found
+    /// The path where the binary can be found.
     pub path: PathBuf,
 }
 
@@ -117,29 +117,30 @@ impl<'de> Deserialize<'de> for Binary {
     }
 }
 
-/// Configuration for a filesystem tree
+/// Configuration for a filesystem tree.
 #[derive(Deserialize, Debug)]
 pub struct File {
-    /// The destination in the initramfs
+    /// The destination in the initramfs.
     pub destination: PathBuf,
-    /// The list of files and directories to copy
+    /// The list of files and directories to copy.
     pub sources: Vec<PathBuf>,
 }
 
+/// Configuration for a symbolic link.
 #[derive(Deserialize, Debug)]
 pub struct Symlink {
-    /// The path where the symlink will be placed
+    /// The path where the symlink will be placed.
     pub source: PathBuf,
-    /// The file the symlink points to
+    /// The file the symlink points to.
     pub destination: PathBuf,
 }
 
-/// Configuration for a kernel module
+/// Configuration for a kernel module.
 #[derive(Debug)]
 pub enum BootModule {
-    /// Name of the kernel module to include
+    /// Name of the kernel module to include.
     Name(String),
-    /// Path to the kernel module, useful for out of tree modules
+    /// Path to the kernel module, useful for out of tree modules.
     Path(PathBuf),
 }
 
@@ -183,11 +184,11 @@ impl<'de> Deserialize<'de> for BootModule {
     }
 }
 
-/// Microcode generation configuration
+/// Microcode generation configuration.
 #[derive(Deserialize, Debug)]
 pub struct Microcode {
-    /// The path to the AMD specific blobs
+    /// The path to the AMD specific blobs.
     pub amd_ucode: Option<PathBuf>,
-    /// The path to the Intel specific blobs
+    /// The path to the Intel specific blobs.
     pub intel_ucode: Option<PathBuf>,
 }
