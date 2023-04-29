@@ -15,7 +15,7 @@ check:
 
 build:
   stage: check
-  image: registry.farenjihn.cloud/nebula/elusive-builder:latest
+  image: quay.io/farenjihn/elusive/builder:latest
   before_script:
     - rustc --version && cargo --version
   script:
@@ -28,7 +28,7 @@ build:
 
 test:
   stage: test
-  image: registry.farenjihn.cloud/nebula/elusive-qemu:latest
+  image: quay.io/farenjihn/elusive/qemu:latest
   needs:
     - build
   script:
