@@ -5,7 +5,7 @@ stages:
 
 check:
   stage: check
-  image: registry.farenjihn.cloud/nebula/elusive-builder:latest
+  image: quay.io/farenjihn/elusive/builder:latest
   before_script:
     - rustc --version && cargo --version
   script:
