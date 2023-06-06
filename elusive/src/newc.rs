@@ -199,7 +199,7 @@ impl Entry {
             rdev_major,
             rdev_minor,
             name,
-            ..
+            data,
         } = self;
 
         // serialize the header for this entry
@@ -225,8 +225,8 @@ impl Entry {
         buf.write_all(&filename)?;
         pad_buf(buf);
 
-        if let Some(data) = &self.data {
-            buf.write_all(data)?;
+        if let Some(data) = data {
+            buf.write_all(&data)?;
             pad_buf(buf);
         }
 
