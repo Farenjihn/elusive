@@ -177,9 +177,7 @@ impl Entry {
             ..Entry::default()
         }
     }
-}
 
-impl Entry {
     /// Serialize the entry to the passed buffer.
     pub fn write(self, buf: &mut Vec<u8>) -> Result<()> {
         let file_size = match &self.data {
@@ -189,24 +187,40 @@ impl Entry {
 
         debug!("Serializing entry: {:?}", self,);
 
+        let Entry {
+            ino,
+            mode,
+            uid,
+            gid,
+            nlink,
+            mtime,
+            dev_major,
+            dev_minor,
+            rdev_major,
+            rdev_minor,
+            name,
+            ..
+        } = self;
+
         // serialize the header for this entry
-        let filename = self.name.into_bytes_with_nul()?;
+        let filename = name.into_bytes_with_nul()?;
+        let filename_len = filename.len();
 
         // magic + 8 * fields + filename + file
         buf.reserve(6 + (13 * 8) + filename.len() + file_size);
         buf.write_all(MAGIC)?;
-        write!(buf, "{:08x}", self.ino)?;
-        write!(buf, "{:08x}", self.mode)?;
-        write!(buf, "{:08x}", self.uid)?; // uid is always 0 (root)
-        write!(buf, "{:08x}", self.gid)?; // gid is always 0 (root)
-        write!(buf, "{:08x}", self.nlink)?;
-        write!(buf, "{:08x}", self.mtime)?;
-        write!(buf, "{:08x}", file_size)?;
-        write!(buf, "{:08x}", self.dev_major)?; // dev_major is always 0
-        write!(buf, "{:08x}", self.dev_minor)?; // dev_minor is always 0
-        write!(buf, "{:08x}", self.rdev_major)?;
-        write!(buf, "{:08x}", self.rdev_minor)?;
-        write!(buf, "{:08x}", filename.len())?;
+        write!(buf, "{ino:08x}")?;
+        write!(buf, "{mode:08x}")?;
+        write!(buf, "{uid:08x}")?;
+        write!(buf, "{gid:08x}")?;
+        write!(buf, "{nlink:08x}")?;
+        write!(buf, "{mtime:08x}")?;
+        write!(buf, "{file_size:08x}")?;
+        write!(buf, "{dev_major:08x}")?;
+        write!(buf, "{dev_minor:08x}")?;
+        write!(buf, "{rdev_major:08x}")?;
+        write!(buf, "{rdev_minor:08x}")?;
+        write!(buf, "{filename_len:08x}")?;
         write!(buf, "{:08x}", 0)?; // CRC, null bytes with our MAGIC
         buf.write_all(&filename)?;
         pad_buf(buf);
@@ -276,6 +290,7 @@ impl EntryBuilder {
     }
 
     /// Add the provided metadata to the entry.
+    #[must_use]
     pub fn with_metadata(self, metadata: &Metadata) -> Self {
         let rdev = metadata.rdev();
 
@@ -291,30 +306,35 @@ impl EntryBuilder {
     }
 
     /// Set the mode for the entry.
+    #[must_use]
     pub const fn mode(mut self, mode: u32) -> Self {
         self.entry.mode = mode;
         self
     }
 
     /// Set the modification time for the entry.
+    #[must_use]
     pub const fn mtime(mut self, mtime: u64) -> Self {
         self.entry.mtime = mtime;
         self
     }
 
     /// Set the major rdev number for the entry.
+    #[must_use]
     pub const fn rdev_major(mut self, rdev_major: u64) -> Self {
         self.entry.rdev_major = rdev_major;
         self
     }
 
     /// Set the minor rdev number for the entry.
+    #[must_use]
     pub const fn rdev_minor(mut self, rdev_minor: u64) -> Self {
         self.entry.rdev_minor = rdev_minor;
         self
     }
 
     /// Build the entry.
+    #[must_use]
     pub fn build(self) -> Entry {
         self.entry
     }

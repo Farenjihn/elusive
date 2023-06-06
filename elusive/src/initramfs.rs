@@ -47,6 +47,104 @@ pub struct InitramfsBuilder {
 }
 
 impl InitramfsBuilder {
+    fn add_entrypoint(&mut self, name: &str, path: &Path) -> Result<()> {
+        if !path.exists() {
+            error!("Failed to find {}: {}", name, path.display());
+            bail!(io::Error::new(
+                io::ErrorKind::NotFound,
+                path.display().to_string()
+            ));
+        }
+
+        let metadata = fs::metadata(path)?;
+        let data = fs::read(path)?;
+
+        let entry = EntryBuilder::file(format!("/{name}"), data)
+            .with_metadata(&metadata)
+            .build();
+
+        self.cache.insert(path.to_path_buf());
+        self.entries.push(entry);
+
+        Ok(())
+    }
+
+    fn add_module(
+        &mut self,
+        kmod: &mut Kmod,
+        module: &Module,
+        uncompress: bool,
+        kernel_release: Option<&str>,
+    ) -> Result<()> {
+        let kmod_dir = if let Some(kernel_release) = kernel_release {
+            Path::new("/lib/modules")
+                .join(kernel_release)
+                .join("kernel")
+        } else {
+            kmod.dir().join("kernel")
+        };
+        self.mkdir_all(&kmod_dir);
+        let path = module.path()?;
+
+        if self.cache.contains(path) {
+            return Ok(());
+        }
+
+        let metadata = fs::metadata(path)?;
+        let data = fs::read(path)?;
+
+        let format = ModuleFormat::from_bytes(&data)?;
+
+        let (filename, data) = if uncompress {
+            let filename = format!("{}.ko", module.name()?);
+            let data = uncompress_module(&data, &format)?;
+
+            (filename, data)
+        } else {
+            let filename = format!("{}.{}", module.name()?, format.extension());
+            (filename, data)
+        };
+
+        let entry = EntryBuilder::file(kmod_dir.join(filename), data)
+            .with_metadata(&metadata)
+            .build();
+
+        self.cache.insert(path.to_path_buf());
+        self.entries.push(entry);
+
+        let info = module.info()?;
+        for name in info
+            .depends()
+            .iter()
+            .chain(info.pre_softdeps())
+            .chain(info.post_softdeps())
+        {
+            let module = kmod.module_from_name(name)?;
+            self.add_module(kmod, &module, uncompress, kernel_release)?;
+        }
+
+        Ok(())
+    }
+
+    /// Create directory entries by recursively walking the provided path.
+    fn mkdir_all(&mut self, path: &Path) {
+        if self.cache.contains(path) {
+            return;
+        }
+
+        if path == Path::new("/") {
+            return;
+        }
+
+        if let Some(parent) = path.parent() {
+            self.mkdir_all(parent);
+        }
+
+        let entry = EntryBuilder::directory(path).mode(DEFAULT_DIR_MODE).build();
+        self.entries.push(entry);
+        self.cache.insert(path.to_path_buf());
+    }
+
     /// Create a new builder.
     pub fn new() -> Result<Self> {
         let mut entries = Vec::new();
@@ -192,15 +290,12 @@ impl InitramfsBuilder {
             ));
         }
 
-        let filename = match path.file_name() {
-            Some(filename) => filename,
-            None => {
-                error!("Failed to get filename for binary: {}", path.display());
-                bail!(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    path.display().to_string()
-                ));
-            }
+        let Some(filename) = path.file_name() else {
+            error!("Failed to get filename for binary: {}", path.display());
+            bail!(io::Error::new(
+                io::ErrorKind::NotFound,
+                path.display().to_string()
+            ));
         };
 
         let name = dest.join(filename);
@@ -340,7 +435,7 @@ impl InitramfsBuilder {
         let module = kmod.module_from_name(name)?;
 
         info!("‣ Adding boot module with name: {}", name);
-        self.add_module(kmod, module, uncompress, kernel_release)?;
+        self.add_module(kmod, &module, uncompress, kernel_release)?;
 
         Ok(())
     }
@@ -356,7 +451,7 @@ impl InitramfsBuilder {
         let module = kmod.module_from_path(path)?;
 
         info!("‣ Adding boot module from path: {}", path.display());
-        self.add_module(kmod, module, uncompress, kernel_release)?;
+        self.add_module(kmod, &module, uncompress, kernel_release)?;
 
         Ok(())
     }
@@ -366,106 +461,6 @@ impl InitramfsBuilder {
         Initramfs {
             entries: self.entries,
         }
-    }
-}
-
-impl InitramfsBuilder {
-    fn add_entrypoint(&mut self, name: &str, path: &Path) -> Result<()> {
-        if !path.exists() {
-            error!("Failed to find {}: {}", name, path.display());
-            bail!(io::Error::new(
-                io::ErrorKind::NotFound,
-                path.display().to_string()
-            ));
-        }
-
-        let metadata = fs::metadata(path)?;
-        let data = fs::read(path)?;
-
-        let entry = EntryBuilder::file(format!("/{}", name), data)
-            .with_metadata(&metadata)
-            .build();
-
-        self.cache.insert(path.to_path_buf());
-        self.entries.push(entry);
-
-        Ok(())
-    }
-
-    fn add_module(
-        &mut self,
-        kmod: &mut Kmod,
-        module: Module,
-        uncompress: bool,
-        kernel_release: Option<&str>,
-    ) -> Result<()> {
-        let kmod_dir = if let Some(kernel_release) = kernel_release {
-            Path::new("/lib/modules")
-                .join(kernel_release)
-                .join("kernel")
-        } else {
-            kmod.dir().join("kernel")
-        };
-        self.mkdir_all(&kmod_dir);
-        let path = module.path()?;
-
-        if self.cache.contains(path) {
-            return Ok(());
-        }
-
-        let metadata = fs::metadata(path)?;
-        let data = fs::read(path)?;
-
-        let format = ModuleFormat::from_bytes(&data)?;
-
-        let (filename, data) = if uncompress {
-            let filename = format!("{}.ko", module.name()?);
-            let data = uncompress_module(&data, &format)?;
-
-            (filename, data)
-        } else {
-            let filename = format!("{}.{}", module.name()?, format.extension());
-            (filename, data)
-        };
-
-        let entry = EntryBuilder::file(kmod_dir.join(filename), data)
-            .with_metadata(&metadata)
-            .build();
-
-        self.cache.insert(path.to_path_buf());
-        self.entries.push(entry);
-
-        let info = module.info()?;
-        for name in info
-            .depends()
-            .iter()
-            .chain(info.pre_softdeps())
-            .chain(info.post_softdeps())
-        {
-            let module = kmod.module_from_name(name)?;
-            self.add_module(kmod, module, uncompress, kernel_release)?;
-        }
-
-        Ok(())
-    }
-
-    /// Create directory entries by recursively walking the provided path.
-    fn mkdir_all(&mut self, path: &Path) {
-        if self.cache.contains(path) {
-            return;
-        }
-
-        if path == Path::new("/") {
-            return;
-        }
-
-        if let Some(parent) = path.parent() {
-            self.mkdir_all(parent);
-        }
-
-        let entry = EntryBuilder::directory(path).mode(DEFAULT_DIR_MODE).build();
-        self.entries.push(entry);
-        self.cache.insert(path.to_path_buf());
     }
 }
 
@@ -552,7 +547,7 @@ mod tests {
         let btrfs = kmod.module_from_name("btrfs")?;
 
         if btrfs.path().is_ok() {
-            builder.add_module(&mut kmod, btrfs, false, None)?;
+            builder.add_module(&mut kmod, &btrfs, false, None)?;
             boot_modules.push(config::BootModule::Name("btrfs".to_string()));
         }
 

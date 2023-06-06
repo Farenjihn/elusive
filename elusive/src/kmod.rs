@@ -1,7 +1,9 @@
 //! Wrapper around libkmod for kernel module handling.
 
-use anyhow::{bail, Result};
+#[allow(clippy::wildcard_imports)]
 use kmod_sys::*;
+
+use anyhow::{bail, Result};
 use std::ffi::CString;
 use std::ffi::{CStr, OsStr};
 use std::mem::MaybeUninit;
@@ -39,7 +41,7 @@ pub enum KmodError {
     UnknownMagic,
 }
 
-/// Wrapper handler for libkmod's kmod_ctx.
+/// Wrapper handler for libkmod's `kmod_ctx`.
 pub struct Kmod {
     dir: PathBuf,
     inner: *mut kmod_ctx,
@@ -61,12 +63,14 @@ impl Kmod {
 
         if inner.is_null() {
             bail!(KmodError::ContextNewFailed);
-        } else {
-            Ok(Kmod {
-                dir: dir.to_path_buf(),
-                inner,
-            })
         }
+
+        let kmod = Kmod {
+            dir: dir.to_path_buf(),
+            inner,
+        };
+
+        Ok(kmod)
     }
 
     /// Get the kernel module directory for this context.
@@ -104,51 +108,9 @@ impl Drop for Kmod {
     }
 }
 
-/// Wrapper handler for libkmod's kmod_module.
+/// Wrapper handler for libkmod's `kmod_module`.
 pub struct Module {
     inner: *mut kmod_module,
-}
-
-impl Module {
-    /// Get the name of this kernel module.
-    pub fn name(&self) -> Result<&str> {
-        let cstr = unsafe {
-            let name = kmod_module_get_name(self.inner);
-
-            if name.is_null() {
-                bail!(KmodError::InvalidModuleHandle(
-                    self.name().unwrap_or(UNKNOWN_MODULE).to_string()
-                ));
-            }
-
-            CStr::from_ptr(name)
-        };
-
-        let name = cstr.to_str()?;
-        Ok(name)
-    }
-
-    /// Get the path of this kernel module.
-    pub fn path(&self) -> Result<&Path> {
-        let cstr = unsafe {
-            let path = kmod_module_get_path(self.inner);
-
-            if path.is_null() {
-                bail!(KmodError::InvalidModuleHandle(
-                    self.name().unwrap_or(UNKNOWN_MODULE).to_string()
-                ));
-            }
-
-            CStr::from_ptr(path)
-        };
-
-        Ok(Path::new(OsStr::from_bytes(cstr.to_bytes())))
-    }
-
-    /// Get more information on this kernel module.
-    pub fn info(&self) -> Result<ModuleInfo> {
-        ModuleInfo::new(self)
-    }
 }
 
 impl Module {
@@ -203,6 +165,46 @@ impl Module {
 
         Ok(Module { inner })
     }
+
+    /// Get the name of this kernel module.
+    pub fn name(&self) -> Result<&str> {
+        let cstr = unsafe {
+            let name = kmod_module_get_name(self.inner);
+
+            if name.is_null() {
+                bail!(KmodError::InvalidModuleHandle(
+                    self.name().unwrap_or(UNKNOWN_MODULE).to_string()
+                ));
+            }
+
+            CStr::from_ptr(name)
+        };
+
+        let name = cstr.to_str()?;
+        Ok(name)
+    }
+
+    /// Get the path of this kernel module.
+    pub fn path(&self) -> Result<&Path> {
+        let cstr = unsafe {
+            let path = kmod_module_get_path(self.inner);
+
+            if path.is_null() {
+                bail!(KmodError::InvalidModuleHandle(
+                    self.name().unwrap_or(UNKNOWN_MODULE).to_string()
+                ));
+            }
+
+            CStr::from_ptr(path)
+        };
+
+        Ok(Path::new(OsStr::from_bytes(cstr.to_bytes())))
+    }
+
+    /// Get more information on this kernel module.
+    pub fn info(&self) -> Result<ModuleInfo> {
+        ModuleInfo::new(self)
+    }
 }
 
 impl Drop for Module {
@@ -226,7 +228,7 @@ pub struct ModuleInfo {
 }
 
 impl ModuleInfo {
-    /// Create a new ModuleInfo from the provided Module.
+    /// Create a new `ModuleInfo` from the provided Module.
     pub fn new(module: &Module) -> Result<Self> {
         let mut list: MaybeUninit<*mut kmod_list> = MaybeUninit::zeroed();
 

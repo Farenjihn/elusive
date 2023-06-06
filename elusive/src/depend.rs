@@ -30,15 +30,12 @@ pub fn resolve(path: &Path) -> Result<Vec<PathBuf>> {
 
     let kind = FileKind::parse(data)?;
 
-    let needed = match kind {
-        FileKind::Elf64 => {
-            let elf = FileHeader64::<Endianness>::parse(data)?;
-            elf_needed(elf, data)
-        }
-        _ => {
-            error!("Failed to parse binary");
-            bail!(DependError::Not64BitElf);
-        }
+    let needed = if kind == FileKind::Elf64 {
+        let elf = FileHeader64::<Endianness>::parse(data)?;
+        elf_needed(elf, data)
+    } else {
+        error!("Failed to parse binary");
+        bail!(DependError::Not64BitElf);
     }?;
 
     Ok(needed)
@@ -125,25 +122,19 @@ fn find_lib(lib: &OsStr) -> Result<PathBuf> {
         bail!(DependError::DlopenError(error.to_string()));
     }
 
-    let ret = unsafe {
-        libc::dlinfo(
-            handle,
-            libc::RTLD_DI_LINKMAP,
-            linkmap.as_mut_ptr() as *mut libc::c_void,
-        )
-    };
+    let ret = unsafe { libc::dlinfo(handle, libc::RTLD_DI_LINKMAP, linkmap.as_mut_ptr().cast()) };
 
     if ret < 0 {
         error!("Failed to get path to dynamic dependency for {:?}", lib);
         bail!(DependError::DlinfoError);
     }
 
-    let lname = unsafe {
+    let l_name = unsafe {
         let linkmap = linkmap.assume_init();
         CStr::from_ptr((*linkmap).l_name)
     };
 
-    let path = PathBuf::from(OsStr::from_bytes(lname.to_bytes()));
+    let path = PathBuf::from(OsStr::from_bytes(l_name.to_bytes()));
     Ok(path)
 }
 

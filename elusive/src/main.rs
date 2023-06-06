@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 use elusive::cli;
 use elusive::cli::Args;
 

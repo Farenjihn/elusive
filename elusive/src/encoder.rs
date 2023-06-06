@@ -51,7 +51,10 @@ impl Encoder {
             }
             Encoder::Zstd => {
                 let mut zstdenc = ZstdEncoder::new(&mut out, 3)?;
-                zstdenc.multithread(num_cpus::get() as u32)?;
+
+                let nproc = u32::try_from(num_cpus::get())?;
+                zstdenc.multithread(nproc)?;
+
                 zstdenc.write_all(data)?;
                 zstdenc.finish()?;
             }

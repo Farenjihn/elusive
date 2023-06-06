@@ -7,9 +7,9 @@ fn main() -> Result<()> {
     println!("cargo:rustc-link-lib=kmod");
 
     let builder = Builder::default().header("kmod.h").layout_tests(false);
-    let bindings = match builder.generate() {
-        Ok(bindings) => bindings,
-        Err(_) => bail!("failed to generate bindings"),
+
+    let Ok(bindings) = builder.generate() else {
+        bail!("failed to generate bindings");
     };
 
     let dir = env::var("OUT_DIR")?;
