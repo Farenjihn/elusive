@@ -5,7 +5,7 @@ edition = "2021"
 license = "MIT/Apache-2.0"
 
 [build-dependencies]
-anyhow = "1.0.72"
+anyhow = "1.0.73"
 
 [build-dependencies.bindgen]
 version = "0.66.1"
