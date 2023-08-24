@@ -23,10 +23,6 @@ allow = [
 multiple-versions = "warn"
 highlight = "all"
 
-[[bans.deny]]
-name = "serde_derive"
-version = ">1.0.171"
-
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
