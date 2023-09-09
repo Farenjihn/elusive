@@ -4,3 +4,4 @@ members = [
     "kmod-sys",
 ]
 exclude = ["shim"]
+resolver = "2"
