@@ -19,16 +19,16 @@ libc = "0.2.147"
 log = "0.4.20"
 num_cpus = "1.16.0"
 serde_yaml = "0.9.25"
-thiserror = "1.0.47"
-walkdir = "2.3.3"
+thiserror = "1.0.48"
+walkdir = "2.4.0"
 xz2 = "0.1.7"
 
 [dependencies.clap]
-version = "4.4.0"
+version = "4.4.2"
 features = ["derive"]
 
 [dependencies.object]
-version = "0.32.0"
+version = "0.32.1"
 default-features = false
 features = ["elf", "read_core", "std"]
 
