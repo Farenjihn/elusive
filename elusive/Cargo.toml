@@ -19,12 +19,12 @@ libc = "0.2.148"
 log = "0.4.20"
 num_cpus = "1.16.0"
 serde_yaml = "0.9.25"
-thiserror = "1.0.48"
+thiserror = "1.0.49"
 walkdir = "2.4.0"
 xz2 = "0.1.7"
 
 [dependencies.clap]
-version = "4.4.4"
+version = "4.4.6"
 features = ["derive"]
 
 [dependencies.object]
