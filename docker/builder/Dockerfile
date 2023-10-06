@@ -1,4 +1,4 @@
-FROM rust:1.72-bullseye
+FROM rust:1.73-bullseye
 
 RUN rustup component add clippy rustfmt
 RUN rustup target add x86_64-unknown-linux-musl
