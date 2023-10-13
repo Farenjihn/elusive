@@ -14,8 +14,8 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.75"
 env_logger = "0.10.0"
-flate2 = "1.0.27"
-libc = "0.2.148"
+flate2 = "1.0.28"
+libc = "0.2.149"
 log = "0.4.20"
 num_cpus = "1.16.0"
 serde_yaml = "0.9.25"
@@ -37,7 +37,7 @@ version = "=1.0.188"
 features = ["derive"]
 
 [dependencies.zstd]
-version = "0.12.4"
+version = "0.13.0"
 features = ["zstdmt"]
 
 [dependencies.kmod-sys]
