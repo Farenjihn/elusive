@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.75"
-env_logger = "0.10.0"
+env_logger = "0.10.1"
 flate2 = "1.0.28"
 libc = "0.2.150"
 log = "0.4.20"
@@ -24,7 +24,7 @@ walkdir = "2.4.0"
 xz2 = "0.1.7"
 
 [dependencies.clap]
-version = "4.4.7"
+version = "4.4.8"
 features = ["derive"]
 
 [dependencies.object]
