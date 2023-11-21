@@ -33,7 +33,7 @@ default-features = false
 features = ["elf", "read_core", "std"]
 
 [dependencies.serde]
-version = "1.0.192"
+version = "1.0.193"
 features = ["derive"]
 
 [dependencies.zstd]
