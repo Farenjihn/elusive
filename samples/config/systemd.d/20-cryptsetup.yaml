@@ -12,9 +12,9 @@ binaries:
   - /usr/bin/blkid
   - /usr/bin/cryptsetup
   - /usr/bin/dmsetup
+  - /usr/bin/systemd-cryptsetup
   - /usr/bin/systemd-tty-ask-password-agent
   - /usr/lib/systemd/system-generators/systemd-cryptsetup-generator
-  - /usr/lib/systemd/systemd-cryptsetup
   - /usr/lib64/libgcc_s.so.1
 files:
   - sources:

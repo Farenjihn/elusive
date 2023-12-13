@@ -30,6 +30,7 @@ binaries:
   - /usr/lib/systemd/system-generators/systemd-fstab-generator
   - /usr/lib/systemd/system-generators/systemd-gpt-auto-generator
   - /usr/lib/systemd/systemd
+  - /usr/lib/systemd/systemd-executor
   - /usr/lib/systemd/systemd-fsck
   - /usr/lib/systemd/systemd-journald
   - /usr/lib/systemd/systemd-modules-load
