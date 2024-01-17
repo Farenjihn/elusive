@@ -8,6 +8,7 @@ use crate::depend;
 use crate::kmod::{Kmod, Module, ModuleFormat};
 use crate::newc::{Archive, Entry, EntryBuilder};
 
+use anyhow::Context;
 use anyhow::{bail, Result};
 use flate2::read::GzDecoder;
 use log::{error, info};
@@ -76,6 +77,11 @@ impl InitramfsBuilder {
         uncompress: bool,
         kernel_release: Option<&str>,
     ) -> Result<()> {
+        // builtin module, nothing to do
+        if module.is_builtin() {
+            return Ok(());
+        }
+
         let kmod_dir = if let Some(kernel_release) = kernel_release {
             Path::new("/lib/modules")
                 .join(kernel_release)
@@ -83,9 +89,10 @@ impl InitramfsBuilder {
         } else {
             kmod.dir().join("kernel")
         };
-        self.mkdir_all(&kmod_dir);
-        let path = module.path()?;
 
+        self.mkdir_all(&kmod_dir);
+
+        let path = module.path().context("libkmod returned null path")?;
         if self.cache.contains(path) {
             return Ok(());
         }
@@ -94,14 +101,15 @@ impl InitramfsBuilder {
         let data = fs::read(path)?;
 
         let format = ModuleFormat::from_bytes(&data)?;
+        let name = module.name().context("libkmod returned null name")?;
 
         let (filename, data) = if uncompress {
-            let filename = format!("{}.ko", module.name()?);
+            let filename = format!("{}.ko", name);
             let data = uncompress_module(&data, &format)?;
 
             (filename, data)
         } else {
-            let filename = format!("{}.{}", module.name()?, format.extension());
+            let filename = format!("{}.{}", name, format.extension());
             (filename, data)
         };
 

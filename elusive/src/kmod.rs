@@ -33,8 +33,6 @@ pub enum KmodError {
     ModuleFromPathFailed(PathBuf),
     #[error("failed to get module information: {0}")]
     ModuleGetInfoFailed(String),
-    #[error("the module handle for '{0}' is invalid, you may need to override the kernel release")]
-    InvalidModuleHandle(String),
     #[error("the data is too small for magic detection")]
     TooSmallForMagic,
     #[error("unknown magic number")]
@@ -167,38 +165,36 @@ impl Module {
     }
 
     /// Get the name of this kernel module.
-    pub fn name(&self) -> Result<&str> {
+    pub fn name(&self) -> Option<&str> {
         let cstr = unsafe {
             let name = kmod_module_get_name(self.inner);
-
             if name.is_null() {
-                bail!(KmodError::InvalidModuleHandle(
-                    self.name().unwrap_or(UNKNOWN_MODULE).to_string()
-                ));
+                return None;
             }
 
             CStr::from_ptr(name)
         };
 
-        let name = cstr.to_str()?;
-        Ok(name)
+        cstr.to_str().ok()
     }
 
     /// Get the path of this kernel module.
-    pub fn path(&self) -> Result<&Path> {
+    pub fn path(&self) -> Option<&Path> {
         let cstr = unsafe {
             let path = kmod_module_get_path(self.inner);
-
             if path.is_null() {
-                bail!(KmodError::InvalidModuleHandle(
-                    self.name().unwrap_or(UNKNOWN_MODULE).to_string()
-                ));
+                return None;
             }
 
             CStr::from_ptr(path)
         };
 
-        Ok(Path::new(OsStr::from_bytes(cstr.to_bytes())))
+        Some(Path::new(OsStr::from_bytes(cstr.to_bytes())))
+    }
+
+    /// Check whether the module is builtin
+    pub fn is_builtin(&self) -> bool {
+        self.path().is_none()
     }
 
     /// Get more information on this kernel module.
