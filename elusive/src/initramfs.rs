@@ -104,12 +104,12 @@ impl InitramfsBuilder {
         let name = module.name().context("libkmod returned null name")?;
 
         let (filename, data) = if uncompress {
-            let filename = format!("{}.ko", name);
+            let filename = format!("{name}.ko");
             let data = uncompress_module(&data, &format)?;
 
             (filename, data)
         } else {
-            let filename = format!("{}.{}", name, format.extension());
+            let filename = format!("{name}.{}", format.extension());
             (filename, data)
         };
 
