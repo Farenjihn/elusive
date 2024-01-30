@@ -8,5 +8,5 @@ license = "MIT/Apache-2.0"
 anyhow = "1.0.79"
 
 [build-dependencies.bindgen]
-version = "0.69.1"
+version = "0.69.2"
 default_features = false
