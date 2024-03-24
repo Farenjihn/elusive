@@ -61,9 +61,6 @@ pub enum Command {
         /// Path to the kernel module source directory
         #[clap(short, long)]
         modules: Option<PathBuf>,
-        // /// Kernel release name to overwrite output folder name for kernel modules
-        // #[clap(short, long)]
-        // kernel_release: Option<String>,
         /// Path where the initramfs will be written
         #[clap(short, long)]
         output: PathBuf,
@@ -110,7 +107,6 @@ pub fn elusive(args: Args) -> Result<()> {
             ucode,
             modules,
             output,
-            // kernel_release,
         } => {
             let mut config: config::Initramfs = {
                 if !config_path.exists() || !config_path.is_file() {
@@ -131,7 +127,11 @@ pub fn elusive(args: Args) -> Result<()> {
             // parse all available modules
             let mut modules = BTreeMap::new();
             for path in confdir_paths {
-                if !path.exists() || !path.is_dir() {
+                if !path.exists() {
+                    continue;
+                }
+
+                if !path.is_dir() {
                     bail!(ConfigurationError::ExpectedDirectory(path));
                 }
 
