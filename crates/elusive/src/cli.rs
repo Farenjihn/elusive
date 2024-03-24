@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::{fs, io};
 
 const DEFAULT_CONFIG_PATH: &str = "/etc/elusive.yaml";
-const DEFAULT_CONFDIR_PATHS: &[&str] = &["/etc/elusive.d", "/usr/share/elusive.d"];
+const DEFAULT_CONFDIR_PATHS: &[&str] = &["/etc/elusive.d", "/usr/share/elusive/elusive.d"];
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigurationError {
