@@ -1,7 +1,9 @@
 name: systemd-crypt
 kernel_modules:
   - aesni_intel
+  - cbc
   - dm-crypt
+  - ecb
   - xts
 binaries:
   - cryptsetup
