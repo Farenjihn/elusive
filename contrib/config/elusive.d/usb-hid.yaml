@@ -1,0 +1,10 @@
+name: usb-hid
+kernel_modules:
+  - atkbd
+  - hid
+  - hid-apple
+  - hid-generic
+  - i8042
+  - usbhid
+  - xhci-hcd
+  - xhci-pci

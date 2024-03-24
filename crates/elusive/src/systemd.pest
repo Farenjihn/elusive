@@ -1,0 +1,12 @@
+WHITESPACE = _{ " " }
+COMMENT = _{ ("#" | ";") ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
+
+key = @{ ASCII_ALPHA+ }
+value = @{ (!NEWLINE ~ ANY)+ }
+
+section = { "[" ~ key ~ "]" }
+property = { key ~ "=" ~ value }
+
+unit = {
+    SOI ~ NEWLINE* ~ ((section | property) ~ NEWLINE+)+ ~ EOI
+}

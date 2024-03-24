@@ -1,36 +1,24 @@
+variables:
+  CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
+
+default:
+  image: docker.io/library/rust:1.75
+  cache:
+    paths:
+      - .cargo
+      - target
+
 stages:
   - check
-  - build
-  - test
 
 check:
   stage: check
-  image: quay.io/farenjihn/elusive/builder:latest
   before_script:
     - rustc --version && cargo --version
+    - rustup component add clippy
+    - rustup component add rustfmt
+    - cargo install cargo-deny
   script:
     - cargo deny check
     - cargo fmt --all -- --check
     - cargo clippy
-
-build:
-  stage: check
-  image: quay.io/farenjihn/elusive/builder:latest
-  before_script:
-    - rustc --version && cargo --version
-  script:
-    - hack/build.sh
-  artifacts:
-    paths:
-      - target/debug/elusive
-      - shim/target/x86_64-unknown-linux-musl/debug/shim
-    expire_in: 1h
-
-test:
-  stage: test
-  image: quay.io/farenjihn/elusive/qemu:latest
-  needs:
-    - build
-  script:
-    - cp /boot/vmlinuz-linux vmlinuz
-    - hack/qemu.sh

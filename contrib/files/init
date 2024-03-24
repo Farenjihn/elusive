@@ -1,0 +1,4 @@
+#!/usr/bin/sh
+
+depmod 1>&/dev/null
+exec /usr/lib/systemd/systemd

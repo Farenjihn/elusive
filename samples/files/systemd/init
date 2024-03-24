@@ -1,6 +1,0 @@
-#!/usr/bin/busybox sh
-
-mount -t devtmpfs devtmpfs -o nosuid /dev
-depmod 1>&/dev/null
-
-exec /usr/lib/systemd/systemd

@@ -1,6 +1,6 @@
+boot
+cobertura.xml
+flamegraph.svg
+perf.data
+perf.data.old
 target
-**/target
-**/*.rs.bk
-**/cobertura.xml
-.output
-vmlinuz

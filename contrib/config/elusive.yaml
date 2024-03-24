@@ -1,0 +1,18 @@
+amd_ucode: /lib/firmware/amd-ucode
+
+init: contrib/files/init
+modules:
+  - base
+  - kmod
+  - blk-ahci
+  - blk-ata
+  - blk-nvme
+  - blk-virtio
+  - fs-ext4
+  - fs-btrfs
+  - device-mapper
+  - systemd
+  - systemd-crypt
+  - systemd-tpm
+  - systemd-udev
+  - usb-hid

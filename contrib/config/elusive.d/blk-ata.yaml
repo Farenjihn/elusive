@@ -1,0 +1,4 @@
+name: blk-ata
+kernel_modules:
+  - ata-generic
+  - libata

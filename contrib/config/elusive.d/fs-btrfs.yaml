@@ -1,0 +1,8 @@
+name: fs-btrfs
+kernel_modules:
+  - btrfs
+binaries:
+  - btrfs
+symlinks:
+  - path: /usr/bin/btrfsck
+    target: btrfs

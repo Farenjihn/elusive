@@ -1,0 +1,5 @@
+name: fs-ext4
+kernel_modules:
+  - ext4
+binaries:
+  - fsck.ext4

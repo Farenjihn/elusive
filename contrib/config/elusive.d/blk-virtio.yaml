@@ -1,0 +1,5 @@
+name: blk-virtio
+kernel_modules:
+  - virtio-blk
+  - virtio-pci
+  - virtio-scsi

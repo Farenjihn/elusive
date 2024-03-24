@@ -1,0 +1,16 @@
+name: kmod
+binaries:
+  - kmod
+symlinks:
+  - path: /usr/bin/depmod
+    target: kmod
+  - path: /usr/bin/insmod
+    target: kmod
+  - path: /usr/bin/lsmod
+    target: kmod
+  - path: /usr/bin/modinfo
+    target: kmod
+  - path: /usr/bin/modprobe
+    target: kmod
+  - path: /usr/bin/rmmod
+    target: kmod

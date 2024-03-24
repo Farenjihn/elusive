@@ -1,0 +1,14 @@
+root:x:0:
+audio:x:983:
+disk:x:993:
+input:x:987:
+kmem:x:986:
+kvm:x:992:
+lp:x:988:
+optical:x:996:
+render:x:997:
+sgx:x:957:
+storage:x:991:
+tty:x:5:
+uucp:x:990:
+video:x:999:

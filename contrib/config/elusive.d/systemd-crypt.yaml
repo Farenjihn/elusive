@@ -1,0 +1,19 @@
+name: systemd-crypt
+kernel_modules:
+  - aesni_intel
+  - dm-crypt
+  - xts
+binaries:
+  - cryptsetup
+  - systemd-cryptsetup
+  - systemd-cryptsetup-generator
+  - /usr/lib/cryptsetup/libcryptsetup-token-systemd-fido2.so
+  - /usr/lib/cryptsetup/libcryptsetup-token-systemd-pkcs11.so
+  - /usr/lib/cryptsetup/libcryptsetup-token-systemd-tpm2.so
+units:
+  # target
+  - cryptsetup.target
+  # path
+  - systemd-ask-password-console.path
+  # service
+  - systemd-ask-password-console.service

@@ -1,0 +1,26 @@
+name: systemd-udev
+binaries:
+  - udevadm
+units:
+  # service
+  - systemd-udev-trigger.service
+  - systemd-udev-settle.service
+  - systemd-udevd.service
+  # socket
+  - systemd-udevd-control.socket
+  - systemd-udevd-kernel.socket
+files:
+  - sources:
+      - /usr/lib/udev/ata_id
+      - /usr/lib/udev/fido_id
+      - /usr/lib/udev/scsi_id
+    destination: /usr/lib/udev
+  - sources:
+      - /usr/lib/udev/rules.d/50-udev-default.rules
+      - /usr/lib/udev/rules.d/60-fido-id.rules
+      - /usr/lib/udev/rules.d/60-persistent-storage.rules
+      - /usr/lib/udev/rules.d/64-btrfs.rules
+      - /usr/lib/udev/rules.d/80-drivers.rules
+      - /usr/lib/udev/rules.d/99-systemd.rules
+    destination: /usr/lib/udev/rules.d
+

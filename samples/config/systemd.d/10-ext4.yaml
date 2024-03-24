@@ -1,3 +1,0 @@
-name: ext4
-boot_modules:
-  - ext4

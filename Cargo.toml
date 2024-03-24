@@ -1,7 +1,6 @@
 [workspace]
-members = [
-    "elusive",
-    "kmod-sys",
-]
-exclude = ["shim"]
 resolver = "2"
+members = [
+    "crates/elusive",
+    "crates/kmod-sys",
+]

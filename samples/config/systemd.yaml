@@ -1,9 +1,0 @@
-init: files/systemd/init
-settings:
-  decompress_modules: true
-module:
-  name: virtualization
-  boot_modules:
-    - virtio_blk
-    - virtio_pci
-    - squashfs

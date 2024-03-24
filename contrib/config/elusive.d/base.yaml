@@ -1,0 +1,24 @@
+name: base
+kernel_modules:
+  - crc32
+  - crc32c
+  - crc32-generic
+  - crc32c-generic
+binaries:
+  - blkid
+  - busybox
+  - lsblk
+  - mount
+  - switch_root
+  - umount
+files:
+  - sources:
+      - contrib/files/etc/group
+      - contrib/files/etc/initrd-release
+      - contrib/files/etc/nsswitch.conf
+      - contrib/files/etc/passwd
+      - contrib/files/etc/shadow
+    destination: /etc
+symlinks:
+  - path: /usr/bin/sh
+    target: busybox

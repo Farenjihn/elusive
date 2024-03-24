@@ -1,0 +1,48 @@
+name: systemd
+binaries:
+  - journalctl
+  - sulogin
+  - systemctl
+  - systemd
+  - systemd-executor
+  - systemd-shutdown
+  - systemd-fstab-generator
+  - systemd-gpt-auto-generator
+units:
+  # target
+  - emergency.target
+  - initrd-fs.target
+  - initrd-root-device.target
+  - initrd-root-fs.target
+  - initrd-switch-root.target
+  - initrd.target
+  - local-fs-pre.target
+  - local-fs.target
+  - paths.target
+  - reboot.target
+  - rescue.target
+  - shutdown.target
+  - slices.target
+  - sockets.target
+  - swap.target
+  - timers.target
+  # service
+  - initrd-cleanup.service
+  - initrd-parse-etc.service
+  - initrd-switch-root.service
+  - kmod-static-nodes.service
+  - systemd-bsod.service
+  - systemd-fsck@.service
+  - systemd-journald.service
+  - systemd-modules-load.service
+  - systemd-pcrphase-initrd.service
+  - systemd-tmpfiles-setup-dev.service
+  # socket
+  - systemd-journald-audit.socket
+  - systemd-journald-dev-log.socket
+  - systemd-journald.socket
+symlinks:
+  - path: /usr/lib/systemd/system/default.target
+    target: initrd.target
+  - path: /usr/lib/systemd/system/ctrl-alt-del.target
+    target: reboot.target

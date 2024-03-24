@@ -1,0 +1,4 @@
+name: blk-ahci
+kernel_modules:
+  - ahci
+  - libahci
