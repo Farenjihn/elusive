@@ -1,6 +1,6 @@
 [package]
 name = "elusive"
-version = "0.14.1"
+version = "0.14.2"
 authors = ["Valentin Finini <farenjihn@gmail.com>"]
 description = "A custom initramfs generator"
 license = "GPL-3.0"
@@ -23,7 +23,6 @@ pest_derive = "2.7.8"
 serde_yaml = "0.9.33"
 thiserror = "1.0.58"
 walkdir = "2.5.0"
-xz2 = "0.1.7"
 
 [dependencies.clap]
 version = "4.5.3"

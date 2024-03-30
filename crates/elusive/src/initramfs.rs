@@ -17,7 +17,6 @@ use std::io::Read;
 use std::path::Path;
 use std::{fs, io};
 use walkdir::WalkDir;
-use xz2::read::XzDecoder;
 use zstd::Decoder as ZstdDecoder;
 
 /// Default directories to include in the initramfs.
@@ -446,10 +445,6 @@ fn uncompress_module(data: &[u8], format: &ModuleFormat) -> Result<Vec<u8>, Init
         ModuleFormat::Elf => buf.extend(data),
         ModuleFormat::Zstd => {
             let mut decoder = ZstdDecoder::new(data)?;
-            decoder.read_to_end(&mut buf)?;
-        }
-        ModuleFormat::Xz => {
-            let mut decoder = XzDecoder::new(data);
             decoder.read_to_end(&mut buf)?;
         }
         ModuleFormat::Gzip => {

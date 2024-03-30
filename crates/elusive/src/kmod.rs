@@ -16,7 +16,6 @@ const UNKNOWN_MODULE: &str = "unknown";
 
 const MAGIC_ELF: [u8; 4] = [0x7F, b'E', b'L', b'F'];
 
-const MAGIC_XZ: [u8; 6] = [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00];
 const MAGIC_GZ: [u8; 2] = [0x1F, 0x8B];
 const MAGIC_ZSTD: [u8; 4] = [0x28, 0xb5, 0x2f, 0xfd];
 
@@ -382,7 +381,6 @@ impl ModuleInfo {
 pub enum ModuleFormat {
     Elf,
     Zstd,
-    Xz,
     Gzip,
 }
 
@@ -400,10 +398,6 @@ impl ModuleFormat {
             return Ok(ModuleFormat::Zstd);
         }
 
-        if data[..6] == MAGIC_XZ {
-            return Ok(ModuleFormat::Xz);
-        }
-
         if data[..2] == MAGIC_GZ {
             return Ok(ModuleFormat::Gzip);
         }
@@ -415,7 +409,6 @@ impl ModuleFormat {
         match self {
             ModuleFormat::Elf => "ko",
             ModuleFormat::Zstd => "ko.zst",
-            ModuleFormat::Xz => "ko.xz",
             ModuleFormat::Gzip => "ko.gz",
         }
     }
