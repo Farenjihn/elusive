@@ -33,6 +33,7 @@ const LIBRARY_SEARCH_PATHS: &[&str] = &[
     "/usr/lib/",
     "/usr/lib64/",
     "/usr/lib/systemd/",
+    "/usr/lib64/systemd/",
     "/lib/",
     "/lib64",
 ];
