@@ -1,8 +1,8 @@
 name: systemd-tpm
 binaries:
-  - /usr/lib/libtss2-esys.so.0
-  - /usr/lib/libtss2-mu.so.0
-  - /usr/lib/libtss2-rc.so.0
-  - /usr/lib/libtss2-tcti-device.so.0
-  - /usr/lib/libtss2-tcti-spi-helper.so.0
-  - /usr/lib/libtss2-tcti-swtpm.so.0
+  - /usr/lib64/libtss2-esys.so.0
+  - /usr/lib64/libtss2-mu.so.0
+  - /usr/lib64/libtss2-rc.so.0
+  - /usr/lib64/libtss2-tcti-device.so.0
+  - /usr/lib64/libtss2-tcti-spi-helper.so.0
+  - /usr/lib64/libtss2-tcti-swtpm.so.0

@@ -96,6 +96,21 @@ impl Entry {
             data: Some(data),
         }
     }
+
+    /// Check if the entry is a directory.
+    pub fn is_dir(&self) -> bool {
+        self.metadata.mode == DIRECTORY_MODE
+    }
+
+    /// Check if the entry is a normal file.
+    pub fn is_file(&self) -> bool {
+        self.metadata.mode == FILE_MODE
+    }
+
+    /// Check if the entry is a symlink.
+    pub fn is_symlink(&self) -> bool {
+        self.metadata.mode == SYMLINK_MODE
+    }
 }
 
 impl TryFrom<std::fs::File> for Entry {
@@ -157,7 +172,7 @@ impl Vfs {
         P: AsRef<Path>,
     {
         if let Some(entry) = self.inner.get(path.as_ref()) {
-            return entry.metadata.mode == DIRECTORY_MODE;
+            return entry.is_dir();
         }
 
         false
@@ -169,7 +184,7 @@ impl Vfs {
         P: AsRef<Path>,
     {
         if let Some(entry) = self.inner.get(path.as_ref()) {
-            return entry.metadata.mode == FILE_MODE;
+            return entry.is_file();
         }
 
         false
@@ -181,22 +196,26 @@ impl Vfs {
         P: AsRef<Path>,
     {
         let path = path.as_ref();
-        if self.contains_dir(path) {
-            return Ok(());
-        }
-
         if let Some(parent) = path.parent() {
             if !self.contains(parent) {
                 return Err(VfsError::NoSuchFileOrDirectory(parent.into()));
             }
 
-            if !self.contains_dir(parent) {
+            // should check if symlink and target
+            if self.contains_file(parent) {
                 return Err(VfsError::NotADirectory(parent.into()));
             }
         }
 
-        if self.contains_file(path) {
-            return Err(VfsError::FileExists(path.into()));
+        if let Some(entry) = self.inner.get(path) {
+            // should check symlink target, for now be lazy
+            if entry.is_dir() || entry.is_symlink() {
+                return Ok(());
+            }
+
+            if entry.is_file() {
+                return Err(VfsError::FileExists(path.into()));
+            }
         }
 
         self.inner.insert(path.into(), Entry::directory());

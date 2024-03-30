@@ -505,8 +505,8 @@ mod tests {
                 .unwrap();
 
             files.push(config::File {
-                destination: PathBuf::from("/lib/udev/rules.d"),
                 sources: vec![udev],
+                destination: PathBuf::from("/lib/udev/rules.d"),
             });
         }
 
