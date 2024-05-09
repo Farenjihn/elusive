@@ -2,7 +2,7 @@ variables:
   CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
 
 default:
-  image: docker.io/library/rust:1.77
+  image: docker.io/library/rust:1.78
   cache:
     paths:
       - .cargo
