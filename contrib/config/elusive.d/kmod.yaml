@@ -1,6 +1,7 @@
 name: kmod
 binaries:
   - kmod
+  - /usr/lib64/libkmod.so.2
 symlinks:
   - path: /usr/bin/depmod
     target: kmod
