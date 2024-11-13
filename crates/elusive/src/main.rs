@@ -8,7 +8,6 @@ use clap::Parser;
 use env_logger::Env;
 
 /// Entrypoint of the program
-#[cfg(not(tarpaulin))]
 fn main() -> Result<()> {
     let env = Env::default().filter_or("RUST_LOG", "info");
     env_logger::init_from_env(env);

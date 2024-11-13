@@ -9,4 +9,4 @@ anyhow = "1.0.81"
 
 [build-dependencies.bindgen]
 version = "0.70.0"
-default_features = false
+default-features = false
