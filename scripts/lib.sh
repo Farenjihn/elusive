@@ -108,7 +108,7 @@ boot_image() {
     local KERNEL_PATH="$(kernel_path ${RELEASE})"
     local INITRAMFS_PATH="$(initramfs_path ${RELEASE})"
 
-    MACHINE="pc-q35-5.0"
+    MACHINE="q35"
     [ -c /dev/kvm ] && MACHINE="${MACHINE},accel=kvm"
 
     set +e
