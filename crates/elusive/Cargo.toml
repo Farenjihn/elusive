@@ -21,7 +21,7 @@ num_cpus = "1.16.0"
 pest = "2.7.8"
 pest_derive = "2.7.8"
 serde_yaml = "0.9.33"
-thiserror = "1.0.58"
+thiserror = "2.0.0"
 walkdir = "2.5.0"
 
 [dependencies.clap]
