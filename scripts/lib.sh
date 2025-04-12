@@ -63,7 +63,7 @@ setup_image() {
         echo "[+] Installing debian ${RELEASE}"
         sudo debootstrap \
             --cache-dir "${CACHE_PATH}" \
-            --include "linux-image-amd64 libtss2-dev" \
+            --include "linux-image-amd64 libtss2-dev passwd" \
             "${RELEASE}" "${MOUNT_PATH}"
 
         sudo chroot boot/mountpoint/ /bin/bash -c 'echo root:root | chpasswd'
