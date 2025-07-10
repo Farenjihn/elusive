@@ -72,7 +72,7 @@ impl NewcSerializer {
             return Ok(());
         }
 
-        trace!("Serializing entry: {:?}", entry);
+        trace!("Serializing entry: {entry:?}");
         let Metadata {
             mode,
             uid,

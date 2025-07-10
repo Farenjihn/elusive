@@ -97,8 +97,8 @@ pub fn elusive(args: Args) -> Result<()> {
         (None, true) => bail!(ConfigurationError::SkipWithoutParameter),
     };
 
-    debug!("Config file path set to {:?}", config_path);
-    debug!("Module directory paths set to {:?}", confdir_paths);
+    debug!("Config file path set to {config_path:?}");
+    debug!("Module directory paths set to {confdir_paths:?}");
 
     let encoder = encoder.unwrap_or(Encoder::Zstd);
 
@@ -113,14 +113,14 @@ pub fn elusive(args: Args) -> Result<()> {
                     bail!(ConfigurationError::ExpectedFile(config_path));
                 }
 
-                debug!("Parsing top-level config file: {:?}", config_path);
+                debug!("Parsing top-level config file: {config_path:?}");
                 let data = fs::read(config_path)?;
                 serde_yaml::from_slice(&data)?
             };
 
             // override kernel modules path
             if let Some(path) = modules {
-                debug!("Overriding kernel module path: {:?}", path);
+                debug!("Overriding kernel module path: {path:?}");
                 config.settings.kernel_module_path = Some(path);
             }
 
@@ -140,7 +140,7 @@ pub fn elusive(args: Args) -> Result<()> {
                     let path = entry.path();
 
                     if path.is_file() {
-                        debug!("Parsing module config file: {:?}", path);
+                        debug!("Parsing module config file: {path:?}");
                         let data = fs::read(path)?;
                         let module = serde_yaml::from_slice::<config::Module>(&data)?;
 

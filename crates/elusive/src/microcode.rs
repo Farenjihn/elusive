@@ -56,7 +56,7 @@ impl MicrocodeBundle {
     pub fn new() -> Result<Self, MicrocodeError> {
         let mut vfs = Vfs::new();
 
-        info!("Adding default microcode directory: {}", UCODE_TREE);
+        info!("Adding default microcode directory: {UCODE_TREE}");
         vfs.create_dir_all(UCODE_TREE)?;
 
         Ok(MicrocodeBundle {

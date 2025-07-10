@@ -100,12 +100,12 @@ impl Initramfs {
         let mut vfs = Vfs::default();
 
         for dir in ROOT_DIRS {
-            debug!("Adding default directory: {}", dir);
+            debug!("Adding default directory: {dir}");
             vfs.create_dir(dir)?;
         }
 
         for (src, dest) in ROOT_SYMLINKS {
-            debug!("Adding default symlink: {} -> {}", src, dest);
+            debug!("Adding default symlink: {src} -> {dest}");
             vfs.create_entry(src, Entry::symlink(dest))?;
         }
 
@@ -307,7 +307,7 @@ impl Initramfs {
     ) -> Result<(), InitramfsError> {
         let module = kmod.module_from_name(name)?;
 
-        debug!("Adding kernel module with name: {}", name);
+        debug!("Adding kernel module with name: {name}");
         self.add_module(kmod, &module)?;
 
         Ok(())
@@ -343,7 +343,7 @@ impl Initramfs {
         } = Unit::from_name(name)?;
 
         if !self.vfs.contains(&path) {
-            debug!("Adding systemd unit: {}", name);
+            debug!("Adding systemd unit: {name}");
 
             let entry = Entry::file(data);
             let parent = path.parent().expect("parent directory");
